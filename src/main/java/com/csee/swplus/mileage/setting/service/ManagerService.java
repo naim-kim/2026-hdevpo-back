@@ -29,4 +29,36 @@ public class ManagerService {
 
         return currentSemester;
     }
+
+    /**
+     * Returns contact info from manager setting (e.g. id=2).
+     * Uses native query so it works even when contact_info column is missing (returns "").
+     */
+    public String getContactInfo() {
+        try {
+            return managerRepository.findContactInfoById(2L)
+                    .filter(s -> s != null && !s.isEmpty())
+                    .orElse("");
+        } catch (Exception e) {
+            log.warn("Could not load contact_info (column may not exist): {}", e.getMessage());
+            return "";
+        }
+    }
+
+    /**
+     * Returns MyPage announcement text from manager setting (e.g. id=2).
+     * Uses a native query so it does not depend on other columns (contact_info,
+     * reg_start/reg_end types, etc.). Returns "" if column/row is missing or any error.
+     */
+    public String getMypageAnnouncement() {
+        try {
+            return managerRepository.findMypageAnnouncementById(2L)
+                    .filter(s -> s != null && !s.isEmpty())
+                    .orElse("");
+        } catch (Exception e) {
+            log.warn("Could not load mypage_announcement (add column if needed): {}", e.getMessage());
+            return "";
+        }
+    }
 }
+

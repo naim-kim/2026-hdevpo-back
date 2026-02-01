@@ -1,5 +1,6 @@
 package com.csee.swplus.mileage.setting.controller;
 
+import com.csee.swplus.mileage.setting.dto.AnnouncementResponse;
 import com.csee.swplus.mileage.setting.dto.ContactResponse;
 import com.csee.swplus.mileage.setting.dto.ManagerResponse;
 import com.csee.swplus.mileage.setting.entity.Manager;
@@ -30,14 +31,17 @@ public class ManagerController {
 
     @GetMapping("/contact")
     public ResponseEntity<ContactResponse> getContact() {
-        Manager manager = managerService.getRegisterDate();
-
-        if (manager == null) {
-            log.error("Manager 정보가 없습니다.");
-            return ResponseEntity.ok(new ContactResponse(""));
-        }
-
-        String contactInfo = manager.getContactInfo() != null ? manager.getContactInfo() : "";
+        String contactInfo = managerService.getContactInfo();
         return ResponseEntity.ok(new ContactResponse(contactInfo));
+    }
+
+    /**
+     * MyPage announcement (e.g. "학부와 전공 정보를 확인한 후, 장학금 신청 대상인 경우에만 신청하세요.").
+     * Stored in _sw_manager_setting.mypage_announcement.
+     */
+    @GetMapping("/announcement")
+    public ResponseEntity<AnnouncementResponse> getAnnouncement() {
+        String announcement = managerService.getMypageAnnouncement();
+        return ResponseEntity.ok(new AnnouncementResponse(announcement));
     }
 }

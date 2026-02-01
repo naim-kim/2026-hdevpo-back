@@ -10,6 +10,8 @@ import com.csee.swplus.mileage.auth.util.JwtUtil;
 import com.csee.swplus.mileage.user.entity.Users;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseCookie;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -40,6 +42,17 @@ public class JwtTokenFilter extends OncePerRequestFilter {
             "/milestone25/api/mileage/auth/logout$",
             "/milestone25_1/api/mileage/auth/logout$",
             "/mileage/api/mileage/auth/logout$",
+            // Public manager endpoints (contact, MyPage announcement)
+            "/api/mileage/contact$",
+            "/api/mileage/announcement$",
+            "/milestone25/api/mileage/contact$",
+            "/milestone25/api/mileage/announcement$",
+            "/milestone25_1/api/mileage/contact$",
+            "/milestone25_1/api/mileage/announcement$",
+            // GitHub OAuth callback (public - GitHub redirects here, but we check auth manually)
+            "/api/mileage/github/callback$",
+            "/milestone25/api/mileage/github/callback$",
+            "/milestone25_1/api/mileage/github/callback$",
             // Swagger paths (with or without context path)
             "^/swagger-ui",
             "^/v3/api-docs",
@@ -129,12 +142,16 @@ public class JwtTokenFilter extends OncePerRequestFilter {
                             loginUser.getName(),
                             loginUser.getEmail());
 
-                    // 새 액세스 토큰을 쿠키로 설정
-                    Cookie newAccessTokenCookie = new Cookie("accessToken", newAccessToken);
-                    newAccessTokenCookie.setHttpOnly(true);
-                    newAccessTokenCookie.setPath("/");
-                    newAccessTokenCookie.setMaxAge(7200); // 토큰 만료 시간과 일치 (2시간)
-                    response.addCookie(newAccessTokenCookie);
+                    // 새 액세스 토큰을 쿠키로 설정 (HttpOnly, SameSite=Lax, Secure when HTTPS)
+                    boolean secure = isSecureRequest(request);
+                    ResponseCookie cookie = ResponseCookie.from("accessToken", newAccessToken)
+                            .path("/")
+                            .maxAge(7200) // 토큰 만료 시간과 일치 (2시간)
+                            .httpOnly(true)
+                            .secure(secure)
+                            .sameSite("Lax")
+                            .build();
+                    response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
 
                     // 토큰 리프레시 확인용 로깅 추가
                     log.info("🔄 사용자 {} 액세스 토큰 리프레시 성공", loginUser.getName());
@@ -178,9 +195,10 @@ public class JwtTokenFilter extends OncePerRequestFilter {
                 lowerURI.contains("/swagger-resources") ||
                 lowerURI.contains("/webjars");
         
-        // Also check for login/logout endpoints (more flexible matching)
+        // Also check for login/logout and GitHub callback endpoints (more flexible matching)
         boolean isAuthEndpoint = lowerURI.contains("/api/mileage/auth/login") ||
-                lowerURI.contains("/api/mileage/auth/logout");
+                lowerURI.contains("/api/mileage/auth/logout") ||
+                lowerURI.contains("/api/mileage/github/callback");
         
         if (isSwaggerPath || isAuthEndpoint) {
             log.debug("✅ Path matches excluded path (fallback check)");
@@ -189,5 +207,12 @@ public class JwtTokenFilter extends OncePerRequestFilter {
         
         log.debug("❌ Path is NOT excluded - authentication required");
         return false;
+    }
+
+    /** Returns true if request is HTTPS (set Secure cookie to prevent transmission over HTTP). */
+    private boolean isSecureRequest(HttpServletRequest request) {
+        if (request.isSecure()) return true;
+        String forwardedProto = request.getHeader("X-Forwarded-Proto");
+        return "https".equalsIgnoreCase(forwardedProto);
     }
 }
