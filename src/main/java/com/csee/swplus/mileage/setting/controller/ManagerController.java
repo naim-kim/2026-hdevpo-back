@@ -2,6 +2,7 @@ package com.csee.swplus.mileage.setting.controller;
 
 import com.csee.swplus.mileage.setting.dto.AnnouncementResponse;
 import com.csee.swplus.mileage.setting.dto.ContactResponse;
+import com.csee.swplus.mileage.setting.dto.MaintenanceResponse;
 import com.csee.swplus.mileage.setting.dto.ManagerResponse;
 import com.csee.swplus.mileage.setting.entity.Manager;
 import com.csee.swplus.mileage.setting.service.ManagerService;
@@ -43,5 +44,17 @@ public class ManagerController {
     public ResponseEntity<AnnouncementResponse> getAnnouncement() {
         String announcement = managerService.getMypageAnnouncement();
         return ResponseEntity.ok(new AnnouncementResponse(announcement));
+    }
+
+    /**
+     * Global maintenance flag endpoint.
+     * Returns { "maintenance": true } when maintenance_mode = 1 in
+     * _sw_manager_setting (id=2).
+     * Frontend can use this to decide whether to show a maintenance page.
+     */
+    @GetMapping("/maintenance")
+    public ResponseEntity<MaintenanceResponse> getMaintenance() {
+        boolean maintenance = managerService.isMaintenanceMode();
+        return ResponseEntity.ok(new MaintenanceResponse(maintenance));
     }
 }

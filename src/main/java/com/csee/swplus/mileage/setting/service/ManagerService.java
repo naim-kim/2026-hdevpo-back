@@ -17,7 +17,7 @@ public class ManagerService {
     private final ManagerRepository managerRepository;
     private final SwManagerSettingRepository swManagerSettingRepository;
 
-    public Manager getRegisterDate(){
+    public Manager getRegisterDate() {
         return managerRepository.findById(2L)
                 .orElse(null);
     }
@@ -32,7 +32,8 @@ public class ManagerService {
 
     /**
      * Returns contact info from manager setting (e.g. id=2).
-     * Uses native query so it works even when contact_info column is missing (returns "").
+     * Uses native query so it works even when contact_info column is missing
+     * (returns "").
      */
     public String getContactInfo() {
         try {
@@ -48,7 +49,8 @@ public class ManagerService {
     /**
      * Returns MyPage announcement text from manager setting (e.g. id=2).
      * Uses a native query so it does not depend on other columns (contact_info,
-     * reg_start/reg_end types, etc.). Returns "" if column/row is missing or any error.
+     * reg_start/reg_end types, etc.). Returns "" if column/row is missing or any
+     * error.
      */
     public String getMypageAnnouncement() {
         try {
@@ -60,5 +62,20 @@ public class ManagerService {
             return "";
         }
     }
-}
 
+    /**
+     * Returns global maintenance flag from manager setting (id=2).
+     * Uses native query so it only depends on maintenance_mode column.
+     * If anything fails, returns false (no maintenance).
+     */
+    public boolean isMaintenanceMode() {
+        try {
+            return managerRepository.findMaintenanceModeById(2L)
+                    .map(v -> v != null && v != 0)
+                    .orElse(false);
+        } catch (Exception e) {
+            log.warn("Could not load maintenance_mode (column may not exist): {}", e.getMessage());
+            return false;
+        }
+    }
+}

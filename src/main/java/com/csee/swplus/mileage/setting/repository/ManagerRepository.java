@@ -7,7 +7,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
 
-public interface ManagerRepository extends JpaRepository<Manager, Long>{
+public interface ManagerRepository extends JpaRepository<Manager, Long> {
     Optional<Manager> findById(Long id);
 
     /**
@@ -20,8 +20,16 @@ public interface ManagerRepository extends JpaRepository<Manager, Long>{
 
     /**
      * Fetches only contact_info so /contact does not depend on full entity.
-     * Returns empty if column or row is missing (table may not have contact_info yet).
+     * Returns empty if column or row is missing (table may not have contact_info
+     * yet).
      */
     @Query(value = "SELECT contact_info FROM _sw_manager_setting WHERE id = :id", nativeQuery = true)
     Optional<String> findContactInfoById(@Param("id") long id);
+
+    /**
+     * Fetches only maintenance_mode so /maintenance does not depend on full entity.
+     * Returns 0/1; 1 means maintenance = true.
+     */
+    @Query(value = "SELECT maintenance_mode FROM _sw_manager_setting WHERE id = :id", nativeQuery = true)
+    Optional<Integer> findMaintenanceModeById(@Param("id") long id);
 }
