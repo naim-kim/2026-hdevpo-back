@@ -8,5 +8,8 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class MaintenanceResponse {
-    private boolean maintenance;
+    private boolean maintenanceMode;
+    private String message;
+    private String estimatedTime;
+    private boolean isAllowedUser;
 }

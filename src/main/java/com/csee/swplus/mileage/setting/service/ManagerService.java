@@ -78,4 +78,56 @@ public class ManagerService {
             return false;
         }
     }
+
+    /**
+     * Maintenance message text (nullable).
+     */
+    public String getMaintenanceMessage() {
+        try {
+            return managerRepository.findMaintenanceMessageById(2L)
+                    .orElse("");
+        } catch (Exception e) {
+            log.warn("Could not load maintenance_message (column may not exist): {}", e.getMessage());
+            return "";
+        }
+    }
+
+    /**
+     * Maintenance estimated time text (nullable).
+     */
+    public String getMaintenanceEta() {
+        try {
+            return managerRepository.findMaintenanceEtaById(2L)
+                    .orElse("");
+        } catch (Exception e) {
+            log.warn("Could not load maintenance_eta (column may not exist): {}", e.getMessage());
+            return "";
+        }
+    }
+
+    /**
+     * Whether given userId is allowed during maintenance (based on comma-separated IDs).
+     */
+    public boolean isUserAllowedDuringMaintenance(String userId) {
+        if (userId == null || userId.isEmpty()) {
+            return false;
+        }
+        try {
+            String raw = managerRepository.findMaintenanceAllowedIdsById(2L)
+                    .orElse("");
+            if (raw.isEmpty()) {
+                return false;
+            }
+            String[] parts = raw.split(",");
+            for (String part : parts) {
+                if (userId.equals(part.trim())) {
+                    return true;
+                }
+            }
+            return false;
+        } catch (Exception e) {
+            log.warn("Could not load maintenance_allowed_ids (column may not exist): {}", e.getMessage());
+            return false;
+        }
+    }
 }

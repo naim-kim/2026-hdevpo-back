@@ -32,4 +32,22 @@ public interface ManagerRepository extends JpaRepository<Manager, Long> {
      */
     @Query(value = "SELECT maintenance_mode FROM _sw_manager_setting WHERE id = :id", nativeQuery = true)
     Optional<Integer> findMaintenanceModeById(@Param("id") long id);
+
+    /**
+     * Maintenance message text (nullable).
+     */
+    @Query(value = "SELECT maintenance_message FROM _sw_manager_setting WHERE id = :id", nativeQuery = true)
+    Optional<String> findMaintenanceMessageById(@Param("id") long id);
+
+    /**
+     * Maintenance estimated time text (nullable).
+     */
+    @Query(value = "SELECT maintenance_eta FROM _sw_manager_setting WHERE id = :id", nativeQuery = true)
+    Optional<String> findMaintenanceEtaById(@Param("id") long id);
+
+    /**
+     * Comma-separated list of allowed user IDs during maintenance (nullable).
+     */
+    @Query(value = "SELECT maintenance_allowed_ids FROM _sw_manager_setting WHERE id = :id", nativeQuery = true)
+    Optional<String> findMaintenanceAllowedIdsById(@Param("id") long id);
 }
