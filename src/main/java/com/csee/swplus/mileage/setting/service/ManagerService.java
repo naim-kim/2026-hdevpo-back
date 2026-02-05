@@ -65,13 +65,14 @@ public class ManagerService {
 
     /**
      * Returns global maintenance flag from manager setting (id=2).
-     * Uses native query so it only depends on maintenance_mode column.
-     * If anything fails, returns false (no maintenance).
+     * Uses SwManagerSetting so it only depends on maintenance_mode column.
+     * If anything fails or column is null, returns false (no maintenance).
      */
     public boolean isMaintenanceMode() {
         try {
-            return managerRepository.findMaintenanceModeById(2L)
-                    .map(v -> v != null && v != 0)
+            return swManagerSettingRepository.findFirstByOrderByIdDesc()
+                    .map(SwManagerSetting::getMaintenanceMode)
+                    .map(v -> v != null && v == 1)
                     .orElse(false);
         } catch (Exception e) {
             log.warn("Could not load maintenance_mode (column may not exist): {}", e.getMessage());

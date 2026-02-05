@@ -27,11 +27,15 @@ public interface ManagerRepository extends JpaRepository<Manager, Long> {
     Optional<String> findContactInfoById(@Param("id") long id);
 
     /**
-     * Fetches only maintenance_mode so /maintenance does not depend on full entity.
-     * Returns 0/1; 1 means maintenance = true.
+     * Fetches maintenance_mode as a boolean so /maintenance does not depend on full entity
+     * or JDBC tinyint mapping quirks. 1 -> true, other/null -> false.
      */
-    @Query(value = "SELECT maintenance_mode FROM _sw_manager_setting WHERE id = :id", nativeQuery = true)
-    Optional<Integer> findMaintenanceModeById(@Param("id") long id);
+    @Query(
+        value = "SELECT CASE WHEN maintenance_mode = 1 THEN TRUE ELSE FALSE END " +
+                "FROM _sw_manager_setting WHERE id = :id",
+        nativeQuery = true
+    )
+    Optional<Boolean> findMaintenanceModeById(@Param("id") long id);
 
     /**
      * Maintenance message text (nullable).
