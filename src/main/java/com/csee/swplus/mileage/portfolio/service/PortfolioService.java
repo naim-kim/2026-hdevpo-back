@@ -3,6 +3,9 @@ package com.csee.swplus.mileage.portfolio.service;
 import com.csee.swplus.mileage.portfolio.dto.ActivityRequest;
 import com.csee.swplus.mileage.portfolio.dto.ActivityResponse;
 import com.csee.swplus.mileage.portfolio.dto.ActivitiesResponse;
+import com.csee.swplus.mileage.portfolio.dto.MileageEntryResponse;
+import com.csee.swplus.mileage.portfolio.dto.MileageLinkRequest;
+import com.csee.swplus.mileage.portfolio.dto.MileageListResponse;
 import com.csee.swplus.mileage.portfolio.dto.RepoEntryRequest;
 import com.csee.swplus.mileage.portfolio.dto.RepoEntryResponse;
 import com.csee.swplus.mileage.portfolio.dto.RepositoriesResponse;
@@ -10,8 +13,10 @@ import com.csee.swplus.mileage.portfolio.dto.TechStackResponse;
 import com.csee.swplus.mileage.portfolio.dto.UserInfoResponse;
 import com.csee.swplus.mileage.portfolio.entity.Portfolio;
 import com.csee.swplus.mileage.portfolio.entity.PortfolioActivity;
+import com.csee.swplus.mileage.portfolio.entity.PortfolioMileageEntry;
 import com.csee.swplus.mileage.portfolio.entity.PortfolioRepoEntry;
 import com.csee.swplus.mileage.portfolio.repository.PortfolioActivityRepository;
+import com.csee.swplus.mileage.portfolio.repository.PortfolioMileageEntryRepository;
 import com.csee.swplus.mileage.portfolio.repository.PortfolioRepository;
 import com.csee.swplus.mileage.portfolio.repository.PortfolioRepoEntryRepository;
 import com.csee.swplus.mileage.user.entity.Users;
@@ -28,6 +33,7 @@ public class PortfolioService {
     private final PortfolioRepository portfolioRepository;
     private final PortfolioRepoEntryRepository portfolioRepoEntryRepository;
     private final PortfolioActivityRepository portfolioActivityRepository;
+    private final PortfolioMileageEntryRepository portfolioMileageEntryRepository;
 
     /**
      * Returns the portfolio for the user, creating one if it does not exist.
@@ -192,6 +198,69 @@ public class PortfolioService {
                 .start_date(a.getStartDate())
                 .end_date(a.getEndDate())
                 .display_order(a.getDisplayOrder())
+                .build();
+    }
+
+    /**
+     * GET /api/portfolio/mileage – 연결된 마일리지 목록.
+     */
+    public MileageListResponse getMileageList(Users user) {
+        Portfolio portfolio = getOrCreatePortfolio(user);
+        java.util.List<PortfolioMileageEntry> list = portfolioMileageEntryRepository.findByPortfolio_IdOrderByDisplayOrderAsc(portfolio.getId());
+        java.util.List<MileageEntryResponse> responses = new java.util.ArrayList<>();
+        for (PortfolioMileageEntry e : list) {
+            responses.add(toMileageEntryResponse(e));
+        }
+        return MileageListResponse.builder().mileage(responses).build();
+    }
+
+    /**
+     * POST /api/portfolio/mileage – 기존 마일리지 연결 (원본 마일리지는 삭제하지 않음).
+     */
+    public MileageEntryResponse linkMileage(Users user, MileageLinkRequest request) {
+        Portfolio portfolio = getOrCreatePortfolio(user);
+        if (portfolioMileageEntryRepository.existsByPortfolio_IdAndMileageId(portfolio.getId(), request.getMileage_id())) {
+            throw new IllegalArgumentException("이미 연결된 마일리지입니다.");
+        }
+        int nextOrder = portfolioMileageEntryRepository.findByPortfolio_IdOrderByDisplayOrderAsc(portfolio.getId()).size();
+        PortfolioMileageEntry entry = PortfolioMileageEntry.builder()
+                .portfolio(portfolio)
+                .mileageId(request.getMileage_id())
+                .additionalInfo(request.getAdditional_info())
+                .displayOrder(nextOrder)
+                .build();
+        entry = portfolioMileageEntryRepository.save(entry);
+        return toMileageEntryResponse(entry);
+    }
+
+    /**
+     * PUT /api/portfolio/mileage/{id} – 추가 설명(additional_info)만 수정 (id = portfolio_mileage link id).
+     */
+    public MileageEntryResponse updateMileageEntry(Users user, Long id, String additionalInfo) {
+        Portfolio portfolio = getOrCreatePortfolio(user);
+        PortfolioMileageEntry entry = portfolioMileageEntryRepository.findByIdAndPortfolio_Id(id, portfolio.getId())
+                .orElseThrow(() -> new DoNotExistException("해당 마일리지 연결을 찾을 수 없습니다."));
+        entry.setAdditionalInfo(additionalInfo);
+        portfolioMileageEntryRepository.save(entry);
+        return toMileageEntryResponse(entry);
+    }
+
+    /**
+     * DELETE /api/portfolio/mileage/{id} – 연결 해제 (원본 마일리지 기록은 삭제하지 않음).
+     */
+    public void unlinkMileage(Users user, Long id) {
+        Portfolio portfolio = getOrCreatePortfolio(user);
+        PortfolioMileageEntry entry = portfolioMileageEntryRepository.findByIdAndPortfolio_Id(id, portfolio.getId())
+                .orElseThrow(() -> new DoNotExistException("해당 마일리지 연결을 찾을 수 없습니다."));
+        portfolioMileageEntryRepository.delete(entry);
+    }
+
+    private static MileageEntryResponse toMileageEntryResponse(PortfolioMileageEntry e) {
+        return MileageEntryResponse.builder()
+                .id(e.getId())
+                .mileage_id(e.getMileageId())
+                .additional_info(e.getAdditionalInfo())
+                .display_order(e.getDisplayOrder())
                 .build();
     }
 }

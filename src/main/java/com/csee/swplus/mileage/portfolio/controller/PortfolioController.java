@@ -4,6 +4,10 @@ import com.csee.swplus.mileage.auth.service.AuthService;
 import com.csee.swplus.mileage.portfolio.dto.ActivitiesResponse;
 import com.csee.swplus.mileage.portfolio.dto.ActivityRequest;
 import com.csee.swplus.mileage.portfolio.dto.ActivityResponse;
+import com.csee.swplus.mileage.portfolio.dto.MileageEntryResponse;
+import com.csee.swplus.mileage.portfolio.dto.MileageLinkRequest;
+import com.csee.swplus.mileage.portfolio.dto.MileageListResponse;
+import com.csee.swplus.mileage.portfolio.dto.MileageUpdateRequest;
 import com.csee.swplus.mileage.portfolio.dto.RepoEntryRequest;
 import com.csee.swplus.mileage.portfolio.dto.RepositoriesResponse;
 import com.csee.swplus.mileage.portfolio.dto.TechStackPutRequest;
@@ -126,6 +130,45 @@ public class PortfolioController {
     public ResponseEntity<Void> deleteActivity(@PathVariable Long id) {
         Users user = getCurrentUser();
         portfolioService.deleteActivity(user, id);
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * GET /api/portfolio/mileage – 연결된 마일리지 목록.
+     */
+    @GetMapping("/mileage")
+    public ResponseEntity<MileageListResponse> getMileage() {
+        Users user = getCurrentUser();
+        return ResponseEntity.ok(portfolioService.getMileageList(user));
+    }
+
+    /**
+     * POST /api/portfolio/mileage – 기존 마일리지 연결.
+     * Body: { "mileage_id": 789, "additional_info": "상세 설명" }
+     */
+    @PostMapping("/mileage")
+    public ResponseEntity<MileageEntryResponse> postMileage(@Valid @RequestBody MileageLinkRequest request) {
+        Users user = getCurrentUser();
+        return ResponseEntity.ok(portfolioService.linkMileage(user, request));
+    }
+
+    /**
+     * PUT /api/portfolio/mileage/{id} – 추가 설명만 수정 (id = portfolio_mileage link id).
+     * Body: { "additional_info": "내용 수정" }
+     */
+    @PutMapping("/mileage/{id}")
+    public ResponseEntity<MileageEntryResponse> putMileage(@PathVariable Long id, @RequestBody MileageUpdateRequest request) {
+        Users user = getCurrentUser();
+        return ResponseEntity.ok(portfolioService.updateMileageEntry(user, id, request != null ? request.getAdditional_info() : null));
+    }
+
+    /**
+     * DELETE /api/portfolio/mileage/{id} – 연결 해제 (원본 마일리지는 삭제하지 않음).
+     */
+    @DeleteMapping("/mileage/{id}")
+    public ResponseEntity<Void> deleteMileage(@PathVariable Long id) {
+        Users user = getCurrentUser();
+        portfolioService.unlinkMileage(user, id);
         return ResponseEntity.noContent().build();
     }
 
