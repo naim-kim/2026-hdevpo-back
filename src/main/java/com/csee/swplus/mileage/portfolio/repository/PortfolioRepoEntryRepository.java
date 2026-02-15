@@ -10,4 +10,6 @@ import java.util.List;
 public interface PortfolioRepoEntryRepository extends JpaRepository<PortfolioRepoEntry, Long> {
 
     List<PortfolioRepoEntry> findByPortfolio_IdOrderByDisplayOrderAsc(Long portfolioId);
+
+    void deleteByPortfolio_Id(Long portfolioId);
 }

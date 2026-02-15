@@ -1,6 +1,8 @@
 package com.csee.swplus.mileage.portfolio.controller;
 
 import com.csee.swplus.mileage.auth.service.AuthService;
+import com.csee.swplus.mileage.portfolio.dto.RepoEntryRequest;
+import com.csee.swplus.mileage.portfolio.dto.RepositoriesResponse;
 import com.csee.swplus.mileage.portfolio.dto.TechStackPutRequest;
 import com.csee.swplus.mileage.portfolio.dto.TechStackResponse;
 import com.csee.swplus.mileage.portfolio.dto.UserInfoPatchRequest;
@@ -13,6 +15,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import javax.validation.Valid;
+import java.util.List;
 
 /**
  * Portfolio "내 정보 모아보기" API.
@@ -64,6 +67,25 @@ public class PortfolioController {
     public ResponseEntity<TechStackResponse> putTechStack(@Valid @RequestBody TechStackPutRequest request) {
         Users user = getCurrentUser();
         return ResponseEntity.ok(portfolioService.putTechStack(user, request.getTech_stack()));
+    }
+
+    /**
+     * GET /api/portfolio/repositories – 노출 토글 + 커스텀 제목 목록.
+     */
+    @GetMapping("/repositories")
+    public ResponseEntity<RepositoriesResponse> getRepositories() {
+        Users user = getCurrentUser();
+        return ResponseEntity.ok(portfolioService.getRepositories(user));
+    }
+
+    /**
+     * PUT /api/portfolio/repositories – 전체 목록 교체 (batch sync).
+     * Body: [ { "repo_id": 123, "custom_title": "Project A", "is_visible": true }, ... ]
+     */
+    @PutMapping("/repositories")
+    public ResponseEntity<RepositoriesResponse> putRepositories(@Valid @RequestBody List<RepoEntryRequest> request) {
+        Users user = getCurrentUser();
+        return ResponseEntity.ok(portfolioService.putRepositories(user, request));
     }
 
     private Users getCurrentUser() {
