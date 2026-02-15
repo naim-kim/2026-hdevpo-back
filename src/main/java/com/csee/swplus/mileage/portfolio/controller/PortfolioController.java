@@ -1,6 +1,8 @@
 package com.csee.swplus.mileage.portfolio.controller;
 
 import com.csee.swplus.mileage.auth.service.AuthService;
+import com.csee.swplus.mileage.portfolio.dto.TechStackPutRequest;
+import com.csee.swplus.mileage.portfolio.dto.TechStackResponse;
 import com.csee.swplus.mileage.portfolio.dto.UserInfoPatchRequest;
 import com.csee.swplus.mileage.portfolio.dto.UserInfoResponse;
 import com.csee.swplus.mileage.portfolio.service.PortfolioService;
@@ -43,6 +45,25 @@ public class PortfolioController {
         Users user = getCurrentUser();
         UserInfoResponse body = portfolioService.updateBio(user, request.getBio());
         return ResponseEntity.ok(body);
+    }
+
+    /**
+     * GET /api/portfolio/tech-stack – 기술 스택 목록.
+     */
+    @GetMapping("/tech-stack")
+    public ResponseEntity<TechStackResponse> getTechStack() {
+        Users user = getCurrentUser();
+        return ResponseEntity.ok(portfolioService.getTechStack(user));
+    }
+
+    /**
+     * PUT /api/portfolio/tech-stack – 기술 스택 전체 교체.
+     * Body: { "tech_stack": ["Java", "Spring Boot", "Docker"] }
+     */
+    @PutMapping("/tech-stack")
+    public ResponseEntity<TechStackResponse> putTechStack(@Valid @RequestBody TechStackPutRequest request) {
+        Users user = getCurrentUser();
+        return ResponseEntity.ok(portfolioService.putTechStack(user, request.getTech_stack()));
     }
 
     private Users getCurrentUser() {

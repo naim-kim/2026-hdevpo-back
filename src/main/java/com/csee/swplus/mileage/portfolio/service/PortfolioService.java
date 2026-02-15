@@ -1,5 +1,6 @@
 package com.csee.swplus.mileage.portfolio.service;
 
+import com.csee.swplus.mileage.portfolio.dto.TechStackResponse;
 import com.csee.swplus.mileage.portfolio.dto.UserInfoResponse;
 import com.csee.swplus.mileage.portfolio.entity.Portfolio;
 import com.csee.swplus.mileage.portfolio.repository.PortfolioRepository;
@@ -51,5 +52,25 @@ public class PortfolioService {
         portfolio.setBio(bio);
         portfolioRepository.save(portfolio);
         return getUserInfo(user);
+    }
+
+    /**
+     * GET /api/portfolio/tech-stack – 기술 스택 목록.
+     */
+    public TechStackResponse getTechStack(Users user) {
+        Portfolio portfolio = getOrCreatePortfolio(user);
+        return TechStackResponse.builder()
+                .tech_stack(portfolio.getTechStack() != null ? portfolio.getTechStack() : java.util.Collections.emptyList())
+                .build();
+    }
+
+    /**
+     * PUT /api/portfolio/tech-stack – 기술 스택 전체 교체 (batch sync).
+     */
+    public TechStackResponse putTechStack(Users user, java.util.List<String> techStack) {
+        Portfolio portfolio = getOrCreatePortfolio(user);
+        portfolio.setTechStack(techStack != null ? techStack : java.util.Collections.emptyList());
+        portfolioRepository.save(portfolio);
+        return getTechStack(user);
     }
 }
