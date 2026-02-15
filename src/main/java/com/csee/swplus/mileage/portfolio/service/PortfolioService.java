@@ -1,15 +1,21 @@
 package com.csee.swplus.mileage.portfolio.service;
 
+import com.csee.swplus.mileage.portfolio.dto.ActivityRequest;
+import com.csee.swplus.mileage.portfolio.dto.ActivityResponse;
+import com.csee.swplus.mileage.portfolio.dto.ActivitiesResponse;
 import com.csee.swplus.mileage.portfolio.dto.RepoEntryRequest;
 import com.csee.swplus.mileage.portfolio.dto.RepoEntryResponse;
 import com.csee.swplus.mileage.portfolio.dto.RepositoriesResponse;
 import com.csee.swplus.mileage.portfolio.dto.TechStackResponse;
 import com.csee.swplus.mileage.portfolio.dto.UserInfoResponse;
 import com.csee.swplus.mileage.portfolio.entity.Portfolio;
+import com.csee.swplus.mileage.portfolio.entity.PortfolioActivity;
 import com.csee.swplus.mileage.portfolio.entity.PortfolioRepoEntry;
+import com.csee.swplus.mileage.portfolio.repository.PortfolioActivityRepository;
 import com.csee.swplus.mileage.portfolio.repository.PortfolioRepository;
 import com.csee.swplus.mileage.portfolio.repository.PortfolioRepoEntryRepository;
 import com.csee.swplus.mileage.user.entity.Users;
+import com.csee.swplus.mileage.auth.exception.DoNotExistException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,6 +27,7 @@ public class PortfolioService {
 
     private final PortfolioRepository portfolioRepository;
     private final PortfolioRepoEntryRepository portfolioRepoEntryRepository;
+    private final PortfolioActivityRepository portfolioActivityRepository;
 
     /**
      * Returns the portfolio for the user, creating one if it does not exist.
@@ -119,5 +126,72 @@ public class PortfolioService {
             }
         }
         return getRepositories(user);
+    }
+
+    /**
+     * GET /api/portfolio/activities – 활동 목록.
+     */
+    public ActivitiesResponse getActivities(Users user) {
+        Portfolio portfolio = getOrCreatePortfolio(user);
+        java.util.List<PortfolioActivity> list = portfolioActivityRepository.findByPortfolio_IdOrderByDisplayOrderAscStartDateDesc(portfolio.getId());
+        java.util.List<ActivityResponse> responses = new java.util.ArrayList<>();
+        for (PortfolioActivity a : list) {
+            responses.add(toActivityResponse(a));
+        }
+        return ActivitiesResponse.builder().activities(responses).build();
+    }
+
+    /**
+     * POST /api/portfolio/activities – 활동 추가 (반환된 id로 이후 PUT 가능).
+     */
+    public ActivityResponse createActivity(Users user, ActivityRequest request) {
+        Portfolio portfolio = getOrCreatePortfolio(user);
+        int nextOrder = portfolioActivityRepository.findByPortfolio_IdOrderByDisplayOrderAscStartDateDesc(portfolio.getId()).size();
+        PortfolioActivity activity = PortfolioActivity.builder()
+                .portfolio(portfolio)
+                .title(request.getTitle())
+                .description(request.getDescription())
+                .startDate(request.getStart_date())
+                .endDate(request.getEnd_date())
+                .displayOrder(nextOrder)
+                .build();
+        activity = portfolioActivityRepository.save(activity);
+        return toActivityResponse(activity);
+    }
+
+    /**
+     * PUT /api/portfolio/activities/{id} – 활동 수정.
+     */
+    public ActivityResponse updateActivity(Users user, Long id, ActivityRequest request) {
+        Portfolio portfolio = getOrCreatePortfolio(user);
+        PortfolioActivity activity = portfolioActivityRepository.findByIdAndPortfolio_Id(id, portfolio.getId())
+                .orElseThrow(() -> new DoNotExistException("해당 활동을 찾을 수 없습니다."));
+        activity.setTitle(request.getTitle());
+        activity.setDescription(request.getDescription());
+        activity.setStartDate(request.getStart_date());
+        activity.setEndDate(request.getEnd_date());
+        portfolioActivityRepository.save(activity);
+        return toActivityResponse(activity);
+    }
+
+    /**
+     * DELETE /api/portfolio/activities/{id} – 활동 삭제.
+     */
+    public void deleteActivity(Users user, Long id) {
+        Portfolio portfolio = getOrCreatePortfolio(user);
+        PortfolioActivity activity = portfolioActivityRepository.findByIdAndPortfolio_Id(id, portfolio.getId())
+                .orElseThrow(() -> new DoNotExistException("해당 활동을 찾을 수 없습니다."));
+        portfolioActivityRepository.delete(activity);
+    }
+
+    private static ActivityResponse toActivityResponse(PortfolioActivity a) {
+        return ActivityResponse.builder()
+                .id(a.getId())
+                .title(a.getTitle())
+                .description(a.getDescription())
+                .start_date(a.getStartDate())
+                .end_date(a.getEndDate())
+                .display_order(a.getDisplayOrder())
+                .build();
     }
 }
