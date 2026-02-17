@@ -17,6 +17,7 @@ public class RepoEntryResponse {
     private Long id;
     private Long repo_id;
     private String custom_title;
+    private String description;
     private Boolean is_visible;
     private Integer display_order;
 }

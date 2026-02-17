@@ -21,5 +21,7 @@ public class RepoEntryRequest {
 
     private String custom_title;
 
+    private String description;
+
     private Boolean is_visible;
 }

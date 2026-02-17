@@ -106,6 +106,7 @@ public class PortfolioService {
                     .id(e.getId())
                     .repo_id(e.getRepoId())
                     .custom_title(e.getCustomTitle())
+                    .description(e.getDescription())
                     .is_visible(e.getIsVisible())
                     .display_order(e.getDisplayOrder())
                     .build());
@@ -127,6 +128,7 @@ public class PortfolioService {
                         .portfolio(portfolio)
                         .repoId(r.getRepo_id())
                         .customTitle(r.getCustom_title())
+                        .description(r.getDescription())
                         .isVisible(visible)
                         .displayOrder(i)
                         .build());
