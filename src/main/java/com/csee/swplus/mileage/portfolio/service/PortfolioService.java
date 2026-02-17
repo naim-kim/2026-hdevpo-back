@@ -12,6 +12,7 @@ import com.csee.swplus.mileage.portfolio.dto.RepositoriesResponse;
 import com.csee.swplus.mileage.portfolio.dto.SettingsResponse;
 import com.csee.swplus.mileage.portfolio.dto.TechStackResponse;
 import com.csee.swplus.mileage.portfolio.dto.UserInfoResponse;
+import com.csee.swplus.mileage.etcSubitem.repository.EtcSubitemRepository;
 import com.csee.swplus.mileage.portfolio.entity.Portfolio;
 import com.csee.swplus.mileage.portfolio.entity.PortfolioActivity;
 import com.csee.swplus.mileage.portfolio.entity.PortfolioMileageEntry;
@@ -35,6 +36,7 @@ public class PortfolioService {
     private final PortfolioRepoEntryRepository portfolioRepoEntryRepository;
     private final PortfolioActivityRepository portfolioActivityRepository;
     private final PortfolioMileageEntryRepository portfolioMileageEntryRepository;
+    private final EtcSubitemRepository etcSubitemRepository;
 
     /**
      * Returns the portfolio for the user, creating one if it does not exist.
@@ -233,6 +235,14 @@ public class PortfolioService {
                 .displayOrder(nextOrder)
                 .build();
         entry = portfolioMileageEntryRepository.save(entry);
+
+        // 마일리지 원본 레코드에 포트폴리오 링크 플래그 설정 (옵션)
+        etcSubitemRepository.findById(request.getMileage_id().intValue())
+                .ifPresent(e -> {
+                    e.setIsLinkedToPortfolio(true);
+                    etcSubitemRepository.save(e);
+                });
+
         return toMileageEntryResponse(entry);
     }
 
@@ -256,6 +266,13 @@ public class PortfolioService {
         PortfolioMileageEntry entry = portfolioMileageEntryRepository.findByIdAndPortfolio_Id(id, portfolio.getId())
                 .orElseThrow(() -> new DoNotExistException("해당 마일리지 연결을 찾을 수 없습니다."));
         portfolioMileageEntryRepository.delete(entry);
+
+        // 마일리지 원본 레코드의 포트폴리오 링크 플래그 해제 (옵션)
+        etcSubitemRepository.findById(entry.getMileageId().intValue())
+                .ifPresent(e -> {
+                    e.setIsLinkedToPortfolio(false);
+                    etcSubitemRepository.save(e);
+                });
     }
 
     private static MileageEntryResponse toMileageEntryResponse(PortfolioMileageEntry e) {

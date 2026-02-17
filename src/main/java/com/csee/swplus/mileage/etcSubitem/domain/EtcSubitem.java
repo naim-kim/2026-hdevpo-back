@@ -39,6 +39,9 @@ public class EtcSubitem {
 
     private String description2;
 
+    @Column(name = "is_linked_to_portfolio")
+    private Boolean isLinkedToPortfolio;
+
     private LocalDateTime moddate;
 
     private LocalDateTime regdate;
