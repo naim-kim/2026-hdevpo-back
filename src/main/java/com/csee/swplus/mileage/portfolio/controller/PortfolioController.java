@@ -20,12 +20,25 @@ import com.csee.swplus.mileage.portfolio.dto.UserInfoResponse;
 import com.csee.swplus.mileage.portfolio.service.PortfolioService;
 import com.csee.swplus.mileage.user.entity.Users;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import javax.validation.Valid;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Portfolio "내 정보 모아보기" API.
@@ -34,13 +47,17 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/portfolio")
 @RequiredArgsConstructor
+@Slf4j
 public class PortfolioController {
 
     private final AuthService authService;
     private final PortfolioService portfolioService;
 
+    @Value("${file.portfolio-profile-upload-dir:${file.profile-upload-dir:./uploads/profile}}")
+    private String profileUploadDir;
+
     /**
-     * GET /api/portfolio/user-info – 기본 정보 (이름, 학교, 전공, 학년, 학기, 소개글).
+     * GET /api/portfolio/user-info – 기본 정보 (이름, 학교, 전공, 학년, 학기, 소개글, 프로필 이미지).
      */
     @GetMapping("/user-info")
     public ResponseEntity<UserInfoResponse> getUserInfo() {
@@ -50,14 +67,101 @@ public class PortfolioController {
     }
 
     /**
-     * PATCH /api/portfolio/user-info – 소개글(bio) 수정.
-     * Body: { "bio": "안녕하세요 ..." }
+     * PATCH /api/portfolio/user-info – 소개글(bio) 및 프로필 이미지 수정 (multipart/form-data).
+     * Body: bio (text, optional), profile_image (file, optional)
      */
-    @PatchMapping("/user-info")
-    public ResponseEntity<UserInfoResponse> patchUserInfo(@Valid @RequestBody UserInfoPatchRequest request) {
+    @PatchMapping(value = "/user-info", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<UserInfoResponse> patchUserInfoMultipart(
+            @RequestParam(value = "bio", required = false) String bio,
+            @RequestPart(value = "profile_image", required = false) MultipartFile profileImage) {
         Users user = getCurrentUser();
-        UserInfoResponse body = portfolioService.updateBio(user, request.getBio());
+        String profileImageUrl = null;
+        
+        // Handle file upload
+        if (profileImage != null && !profileImage.isEmpty()) {
+            try {
+                // Get current portfolio to check for existing image
+                com.csee.swplus.mileage.portfolio.entity.Portfolio currentPortfolio = portfolioService.getOrCreatePortfolio(user);
+                String oldImageUrl = currentPortfolio.getProfileImageUrl();
+                
+                // Delete old image if exists
+                if (oldImageUrl != null && !oldImageUrl.isEmpty()) {
+                    try {
+                        Path oldImagePath = Paths.get(profileUploadDir).resolve(oldImageUrl);
+                        Files.deleteIfExists(oldImagePath);
+                        log.info("Deleted old profile image: {}", oldImageUrl);
+                    } catch (IOException e) {
+                        log.warn("Failed to delete old profile image: {}", oldImageUrl, e);
+                    }
+                }
+                
+                // Ensure upload directory exists
+                Path uploadPath = Paths.get(profileUploadDir);
+                if (!Files.exists(uploadPath)) {
+                    Files.createDirectories(uploadPath);
+                }
+                
+                // Generate unique filename
+                String originalFilename = profileImage.getOriginalFilename();
+                String extension = originalFilename != null && originalFilename.contains(".") 
+                    ? originalFilename.substring(originalFilename.lastIndexOf(".")) 
+                    : "";
+                String uniqueFilename = UUID.randomUUID().toString() + extension;
+                
+                // Save file
+                Path targetLocation = uploadPath.resolve(uniqueFilename);
+                Files.copy(profileImage.getInputStream(), targetLocation, StandardCopyOption.REPLACE_EXISTING);
+                
+                profileImageUrl = uniqueFilename;
+                log.info("Profile image saved: {}", uniqueFilename);
+            } catch (IOException e) {
+                log.error("Failed to save profile image", e);
+                throw new RuntimeException("프로필 이미지 저장 중 오류가 발생했습니다.");
+            }
+        }
+        
+        UserInfoResponse body = portfolioService.updateBio(user, bio, profileImageUrl);
         return ResponseEntity.ok(body);
+    }
+
+    /**
+     * PATCH /api/portfolio/user-info – 소개글(bio) 및 프로필 이미지 URL 수정 (application/json).
+     * Body: { "bio": "...", "profile_image_url": "..." }
+     * Use this for updating bio only or setting/clearing profile_image_url without file upload.
+     */
+    @PatchMapping(value = "/user-info", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<UserInfoResponse> patchUserInfoJson(@Valid @RequestBody UserInfoPatchRequest request) {
+        Users user = getCurrentUser();
+        UserInfoResponse body = portfolioService.updateBio(user, request.getBio(), request.getProfile_image_url());
+        return ResponseEntity.ok(body);
+    }
+
+    /**
+     * GET /api/portfolio/user-info/image/{filename} – 프로필 이미지 조회.
+     */
+    @GetMapping("/user-info/image/{filename}")
+    public ResponseEntity<Resource> getProfileImage(@PathVariable String filename) {
+        try {
+            Path filePath = Paths.get(profileUploadDir).resolve(filename).normalize();
+            Resource resource = new UrlResource(filePath.toUri());
+            
+            if (!resource.exists()) {
+                return ResponseEntity.notFound().build();
+            }
+            
+            String contentType = Files.probeContentType(filePath);
+            if (contentType == null) {
+                contentType = MediaType.APPLICATION_OCTET_STREAM_VALUE;
+            }
+            
+            return ResponseEntity.ok()
+                    .contentType(MediaType.parseMediaType(contentType))
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + resource.getFilename() + "\"")
+                    .body(resource);
+        } catch (IOException e) {
+            log.error("Failed to load profile image: {}", filename, e);
+            return ResponseEntity.badRequest().build();
+        }
     }
 
     /**

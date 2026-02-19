@@ -8,7 +8,7 @@ import lombok.Setter;
 import javax.validation.constraints.Size;
 
 /**
- * PATCH /api/portfolio/user-info – 소개글(bio) 수정 요청.
+ * PATCH /api/portfolio/user-info – 소개글(bio) 및 프로필 이미지 수정 요청.
  */
 @Getter
 @Setter
@@ -18,4 +18,6 @@ public class UserInfoPatchRequest {
 
     @Size(max = 5000)
     private String bio;
+
+    private String profile_image_url;
 }

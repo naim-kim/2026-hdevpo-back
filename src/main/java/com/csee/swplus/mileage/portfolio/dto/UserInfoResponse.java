@@ -21,4 +21,5 @@ public class UserInfoResponse {
     private Integer grade;
     private Integer semester;
     private String bio;
+    private String profile_image_url;
 }

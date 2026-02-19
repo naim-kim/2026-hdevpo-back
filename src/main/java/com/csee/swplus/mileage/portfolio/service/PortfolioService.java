@@ -52,7 +52,7 @@ public class PortfolioService {
     }
 
     /**
-     * GET /api/portfolio/user-info – 기본 정보 (학교 정보 + bio).
+     * GET /api/portfolio/user-info – 기본 정보 (학교 정보 + bio + profile_image_url).
      */
     public UserInfoResponse getUserInfo(Users user) {
         Portfolio portfolio = getOrCreatePortfolio(user);
@@ -64,15 +64,21 @@ public class PortfolioService {
                 .grade(user.getGrade())
                 .semester(user.getSemester())
                 .bio(portfolio.getBio())
+                .profile_image_url(portfolio.getProfileImageUrl())
                 .build();
     }
 
     /**
-     * PATCH /api/portfolio/user-info – 소개글(bio)만 수정.
+     * PATCH /api/portfolio/user-info – 소개글(bio) 및 프로필 이미지 수정.
      */
-    public UserInfoResponse updateBio(Users user, String bio) {
+    public UserInfoResponse updateBio(Users user, String bio, String profileImageUrl) {
         Portfolio portfolio = getOrCreatePortfolio(user);
-        portfolio.setBio(bio);
+        if (bio != null) {
+            portfolio.setBio(bio);
+        }
+        if (profileImageUrl != null) {
+            portfolio.setProfileImageUrl(profileImageUrl);
+        }
         portfolioRepository.save(portfolio);
         return getUserInfo(user);
     }
