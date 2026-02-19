@@ -4,6 +4,7 @@ import com.csee.swplus.mileage.auth.service.AuthService;
 import com.csee.swplus.mileage.portfolio.dto.ActivitiesResponse;
 import com.csee.swplus.mileage.portfolio.dto.ActivityRequest;
 import com.csee.swplus.mileage.portfolio.dto.ActivityResponse;
+import com.csee.swplus.mileage.portfolio.dto.MileageEntryRequest;
 import com.csee.swplus.mileage.portfolio.dto.MileageEntryResponse;
 import com.csee.swplus.mileage.portfolio.dto.MileageLinkRequest;
 import com.csee.swplus.mileage.portfolio.dto.MileageListResponse;
@@ -142,6 +143,16 @@ public class PortfolioController {
     public ResponseEntity<MileageListResponse> getMileage() {
         Users user = getCurrentUser();
         return ResponseEntity.ok(portfolioService.getMileageList(user));
+    }
+
+    /**
+     * PUT /api/portfolio/mileage – 전체 목록 교체 (repositories와 동일 패턴).
+     * Body: [ { "mileage_id": 789, "additional_info": "설명" }, ... ]
+     */
+    @PutMapping("/mileage")
+    public ResponseEntity<MileageListResponse> putMileage(@Valid @RequestBody List<MileageEntryRequest> request) {
+        Users user = getCurrentUser();
+        return ResponseEntity.ok(portfolioService.putMileageList(user, request != null ? request : java.util.Collections.emptyList()));
     }
 
     /**

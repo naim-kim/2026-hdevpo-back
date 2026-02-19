@@ -3,6 +3,7 @@ package com.csee.swplus.mileage.portfolio.service;
 import com.csee.swplus.mileage.portfolio.dto.ActivityRequest;
 import com.csee.swplus.mileage.portfolio.dto.ActivityResponse;
 import com.csee.swplus.mileage.portfolio.dto.ActivitiesResponse;
+import com.csee.swplus.mileage.portfolio.dto.MileageEntryRequest;
 import com.csee.swplus.mileage.portfolio.dto.MileageEntryResponse;
 import com.csee.swplus.mileage.portfolio.dto.MileageLinkRequest;
 import com.csee.swplus.mileage.portfolio.dto.MileageListResponse;
@@ -204,6 +205,63 @@ public class PortfolioService {
                 .end_date(a.getEndDate())
                 .display_order(a.getDisplayOrder())
                 .build();
+    }
+
+    /**
+     * PUT /api/portfolio/mileage – 전체 목록 교체 (repositories와 동일 패턴).
+     * 기존 연결을 모두 삭제한 뒤 요청 목록으로 재등록. 순서는 request 배열 순서.
+     */
+    public MileageListResponse putMileageList(Users user, java.util.List<MileageEntryRequest> request) {
+        Portfolio portfolio = getOrCreatePortfolio(user);
+        
+        // Validate request: check for duplicates and existence
+        if (request != null && !request.isEmpty()) {
+            java.util.Set<Long> seenIds = new java.util.HashSet<>();
+            for (MileageEntryRequest req : request) {
+                if (req == null || req.getMileage_id() == null) continue;
+                // Check for duplicates in request
+                if (seenIds.contains(req.getMileage_id())) {
+                    throw new IllegalArgumentException("중복된 mileage_id가 있습니다: " + req.getMileage_id());
+                }
+                seenIds.add(req.getMileage_id());
+                // Check that mileage_id exists in _sw_mileage_record
+                if (!etcSubitemRepository.existsById(req.getMileage_id().intValue())) {
+                    throw new DoNotExistException("마일리지 ID를 찾을 수 없습니다: " + req.getMileage_id());
+                }
+            }
+        }
+        
+        java.util.List<PortfolioMileageEntry> current = portfolioMileageEntryRepository.findByPortfolio_IdOrderByDisplayOrderAsc(portfolio.getId());
+        // 기존 연결 해제 시 원본 레코드의 is_linked_to_portfolio 플래그 해제
+        for (PortfolioMileageEntry e : current) {
+            etcSubitemRepository.findById(e.getMileageId().intValue())
+                    .ifPresent(record -> {
+                        record.setIsLinkedToPortfolio(false);
+                        etcSubitemRepository.save(record);
+                    });
+        }
+        portfolioMileageEntryRepository.deleteByPortfolio_Id(portfolio.getId());
+        portfolioMileageEntryRepository.flush();
+
+        if (request != null) {
+            int order = 0;
+            for (MileageEntryRequest req : request) {
+                if (req == null || req.getMileage_id() == null) continue;
+                PortfolioMileageEntry entry = PortfolioMileageEntry.builder()
+                        .portfolio(portfolio)
+                        .mileageId(req.getMileage_id())
+                        .additionalInfo(req.getAdditional_info())
+                        .displayOrder(order++)
+                        .build();
+                portfolioMileageEntryRepository.save(entry);
+                etcSubitemRepository.findById(req.getMileage_id().intValue())
+                        .ifPresent(record -> {
+                            record.setIsLinkedToPortfolio(true);
+                            etcSubitemRepository.save(record);
+                        });
+            }
+        }
+        return getMileageList(user);
     }
 
     /**

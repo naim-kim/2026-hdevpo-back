@@ -15,4 +15,6 @@ public interface PortfolioMileageEntryRepository extends JpaRepository<Portfolio
     Optional<PortfolioMileageEntry> findByIdAndPortfolio_Id(Long id, Long portfolioId);
 
     boolean existsByPortfolio_IdAndMileageId(Long portfolioId, Long mileageId);
+
+    void deleteByPortfolio_Id(Long portfolioId);
 }
