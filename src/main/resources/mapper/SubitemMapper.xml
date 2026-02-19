@@ -52,4 +52,15 @@
 
         ORDER BY mS.regdate;
     </select>
+
+    <select id="findNamesBySubitemId" resultType="com.csee.swplus.mileage.subitem.dto.SubitemNamesDto">
+        SELECT
+            mS.subitem_name AS subitemName,
+            mC.cname AS categoryName
+        FROM _sw_mileage_subitem AS mS
+        INNER JOIN _sw_mileage_category AS mC
+            ON mS.category_id = mC.id
+        WHERE mS.id = #{subitemId}
+        LIMIT 1
+    </select>
 </mapper>

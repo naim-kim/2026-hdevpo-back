@@ -22,6 +22,8 @@ import com.csee.swplus.mileage.portfolio.repository.PortfolioActivityRepository;
 import com.csee.swplus.mileage.portfolio.repository.PortfolioMileageEntryRepository;
 import com.csee.swplus.mileage.portfolio.repository.PortfolioRepository;
 import com.csee.swplus.mileage.portfolio.repository.PortfolioRepoEntryRepository;
+import com.csee.swplus.mileage.subitem.dto.SubitemNamesDto;
+import com.csee.swplus.mileage.subitem.mapper.SubitemMapper;
 import com.csee.swplus.mileage.user.entity.Users;
 import com.csee.swplus.mileage.auth.exception.DoNotExistException;
 import lombok.RequiredArgsConstructor;
@@ -38,6 +40,7 @@ public class PortfolioService {
     private final PortfolioActivityRepository portfolioActivityRepository;
     private final PortfolioMileageEntryRepository portfolioMileageEntryRepository;
     private final EtcSubitemRepository etcSubitemRepository;
+    private final SubitemMapper subitemMapper;
 
     /**
      * Returns the portfolio for the user, creating one if it does not exist.
@@ -354,6 +357,13 @@ public class PortfolioService {
                     builder.categoryId(record.getCategoryId());
                     builder.semester(record.getSemester());
                     builder.description1(record.getDescription1());
+
+                    // 이름 정보는 subitem/category 테이블 join으로 조회
+                    SubitemNamesDto names = subitemMapper.findNamesBySubitemId(record.getSubitemId());
+                    if (names != null) {
+                        builder.subitemName(names.getSubitemName());
+                        builder.categoryName(names.getCategoryName());
+                    }
                 });
 
         return builder.build();

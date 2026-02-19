@@ -21,7 +21,9 @@ public class MileageEntryResponse {
 
     // 원본 마일리지(_sw_mileage_record)에서 가져오는 읽기 전용 정보들
     private Integer subitemId;
+    private String subitemName;
     private Integer categoryId;
+    private String categoryName;
     private String semester;
     private String description1;
 }

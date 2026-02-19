@@ -1,6 +1,6 @@
 package com.csee.swplus.mileage.subitem.mapper;
 
-import com.csee.swplus.mileage.subitem.dto.SubitemRequestDto;
+import com.csee.swplus.mileage.subitem.dto.SubitemNamesDto;
 import com.csee.swplus.mileage.subitem.dto.SubitemResponseDto;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -15,4 +15,6 @@ public interface SubitemMapper {
             @Param("semester") String semester,
             @Param("done") String done
     );
+
+    SubitemNamesDto findNamesBySubitemId(@Param("subitemId") Integer subitemId);
 }
