@@ -34,6 +34,9 @@ public class PortfolioRepoEntry extends BaseTime {
     @Column(name = "custom_title", length = 255)
     private String customTitle;
 
+    @Column(name = "description", columnDefinition = "TEXT")
+    private String description;
+
     @Column(name = "is_visible", nullable = false)
     @Builder.Default
     private Boolean isVisible = true;

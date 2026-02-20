@@ -4,6 +4,7 @@ import com.csee.swplus.mileage.auth.exception.DoNotExistException;
 import com.csee.swplus.mileage.auth.exception.FailedHisnetLoginException;
 import com.csee.swplus.mileage.base.response.ExceptionResponse;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -38,6 +39,22 @@ public class AuthExceptionController {
         ExceptionResponse response = ExceptionResponse.builder()
                 .error("Bad Request")
                 .message(e.getMessage())
+                .build();
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ExceptionResponse> handleDataIntegrityViolation(DataIntegrityViolationException e) {
+        log.warn("DataIntegrityViolationException: {}", e.getMessage());
+        String msg = e.getMostSpecificCause() != null ? e.getMostSpecificCause().getMessage() : e.getMessage();
+        if (msg != null && msg.toLowerCase().contains("foreign key")) {
+            msg = "존재하지 않는 mileage_id가 포함되어 있습니다. mileage_id가 _sw_mileage_record에 있는지 확인하세요.";
+        } else if (msg != null && (msg.toLowerCase().contains("duplicate") || msg.toLowerCase().contains("unique"))) {
+            msg = "중복된 mileage_id가 요청에 포함되어 있습니다.";
+        }
+        ExceptionResponse response = ExceptionResponse.builder()
+                .error("Bad Request")
+                .message(msg != null ? msg : "데이터 제약 조건 위반")
                 .build();
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
     }

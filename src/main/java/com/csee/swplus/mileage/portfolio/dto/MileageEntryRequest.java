@@ -8,20 +8,16 @@ import lombok.Setter;
 import javax.validation.constraints.NotNull;
 
 /**
- * One item in PUT /api/portfolio/repositories body.
+ * One item in PUT /api/portfolio/mileage body (same pattern as RepoEntryRequest).
  */
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class RepoEntryRequest {
+public class MileageEntryRequest {
 
     @NotNull
-    private Long repo_id;
+    private Long mileage_id;
 
-    private String custom_title;
-
-    private String description;
-
-    private Boolean is_visible;
+    private String additional_info;
 }

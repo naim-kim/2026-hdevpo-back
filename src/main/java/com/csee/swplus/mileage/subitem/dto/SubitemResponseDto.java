@@ -14,4 +14,7 @@ public class SubitemResponseDto {
     private Boolean done;
     private Integer recordId;
     private String description1;
+
+    // 포트폴리오에 연결되어 있는지 여부 (새 필드)
+    private Boolean inPortfolio;
 }

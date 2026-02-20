@@ -15,7 +15,12 @@
         CASE
         WHEN mR.id IS NOT NULL THEN TRUE
         ELSE FALSE
-        END AS done
+        END AS done,
+        -- Whether this mileage record is linked to the user's portfolio
+        CASE
+        WHEN mR.is_linked_to_portfolio = 1 THEN TRUE
+        ELSE FALSE
+        END AS inPortfolio
         FROM _sw_mileage_subitem AS mS
         INNER JOIN _sw_mileage_category AS mC
         ON mS.category_id = mC.id
@@ -46,5 +51,16 @@
         </if>
 
         ORDER BY mS.regdate;
+    </select>
+
+    <select id="findNamesBySubitemId" resultType="com.csee.swplus.mileage.subitem.dto.SubitemNamesDto">
+        SELECT
+            mS.subitem_name AS subitemName,
+            mC.cname AS categoryName
+        FROM _sw_mileage_subitem AS mS
+        INNER JOIN _sw_mileage_category AS mC
+            ON mS.category_id = mC.id
+        WHERE mS.id = #{subitemId}
+        LIMIT 1
     </select>
 </mapper>

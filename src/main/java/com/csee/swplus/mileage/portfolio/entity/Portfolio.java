@@ -32,6 +32,9 @@ public class Portfolio extends BaseTime {
     @Column(name = "bio", columnDefinition = "TEXT")
     private String bio;
 
+    @Column(name = "profile_image_url", length = 255)
+    private String profileImageUrl;
+
     @Convert(converter = StringListJsonConverter.class)
     @Column(name = "tech_stack", columnDefinition = "TEXT")
     private List<String> techStack;

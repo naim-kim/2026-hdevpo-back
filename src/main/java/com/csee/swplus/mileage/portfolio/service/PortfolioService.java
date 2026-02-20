@@ -3,6 +3,7 @@ package com.csee.swplus.mileage.portfolio.service;
 import com.csee.swplus.mileage.portfolio.dto.ActivityRequest;
 import com.csee.swplus.mileage.portfolio.dto.ActivityResponse;
 import com.csee.swplus.mileage.portfolio.dto.ActivitiesResponse;
+import com.csee.swplus.mileage.portfolio.dto.MileageEntryRequest;
 import com.csee.swplus.mileage.portfolio.dto.MileageEntryResponse;
 import com.csee.swplus.mileage.portfolio.dto.MileageLinkRequest;
 import com.csee.swplus.mileage.portfolio.dto.MileageListResponse;
@@ -12,6 +13,7 @@ import com.csee.swplus.mileage.portfolio.dto.RepositoriesResponse;
 import com.csee.swplus.mileage.portfolio.dto.SettingsResponse;
 import com.csee.swplus.mileage.portfolio.dto.TechStackResponse;
 import com.csee.swplus.mileage.portfolio.dto.UserInfoResponse;
+import com.csee.swplus.mileage.etcSubitem.repository.EtcSubitemRepository;
 import com.csee.swplus.mileage.portfolio.entity.Portfolio;
 import com.csee.swplus.mileage.portfolio.entity.PortfolioActivity;
 import com.csee.swplus.mileage.portfolio.entity.PortfolioMileageEntry;
@@ -20,6 +22,8 @@ import com.csee.swplus.mileage.portfolio.repository.PortfolioActivityRepository;
 import com.csee.swplus.mileage.portfolio.repository.PortfolioMileageEntryRepository;
 import com.csee.swplus.mileage.portfolio.repository.PortfolioRepository;
 import com.csee.swplus.mileage.portfolio.repository.PortfolioRepoEntryRepository;
+import com.csee.swplus.mileage.subitem.dto.SubitemNamesDto;
+import com.csee.swplus.mileage.subitem.mapper.SubitemMapper;
 import com.csee.swplus.mileage.user.entity.Users;
 import com.csee.swplus.mileage.auth.exception.DoNotExistException;
 import lombok.RequiredArgsConstructor;
@@ -35,6 +39,8 @@ public class PortfolioService {
     private final PortfolioRepoEntryRepository portfolioRepoEntryRepository;
     private final PortfolioActivityRepository portfolioActivityRepository;
     private final PortfolioMileageEntryRepository portfolioMileageEntryRepository;
+    private final EtcSubitemRepository etcSubitemRepository;
+    private final SubitemMapper subitemMapper;
 
     /**
      * Returns the portfolio for the user, creating one if it does not exist.
@@ -49,7 +55,7 @@ public class PortfolioService {
     }
 
     /**
-     * GET /api/portfolio/user-info – 기본 정보 (학교 정보 + bio).
+     * GET /api/portfolio/user-info – 기본 정보 (학교 정보 + bio + profile_image_url).
      */
     public UserInfoResponse getUserInfo(Users user) {
         Portfolio portfolio = getOrCreatePortfolio(user);
@@ -61,15 +67,21 @@ public class PortfolioService {
                 .grade(user.getGrade())
                 .semester(user.getSemester())
                 .bio(portfolio.getBio())
+                .profile_image_url(portfolio.getProfileImageUrl())
                 .build();
     }
 
     /**
-     * PATCH /api/portfolio/user-info – 소개글(bio)만 수정.
+     * PATCH /api/portfolio/user-info – 소개글(bio) 및 프로필 이미지 수정.
      */
-    public UserInfoResponse updateBio(Users user, String bio) {
+    public UserInfoResponse updateBio(Users user, String bio, String profileImageUrl) {
         Portfolio portfolio = getOrCreatePortfolio(user);
-        portfolio.setBio(bio);
+        if (bio != null) {
+            portfolio.setBio(bio);
+        }
+        if (profileImageUrl != null) {
+            portfolio.setProfileImageUrl(profileImageUrl);
+        }
         portfolioRepository.save(portfolio);
         return getUserInfo(user);
     }
@@ -106,6 +118,7 @@ public class PortfolioService {
                     .id(e.getId())
                     .repo_id(e.getRepoId())
                     .custom_title(e.getCustomTitle())
+                    .description(e.getDescription())
                     .is_visible(e.getIsVisible())
                     .display_order(e.getDisplayOrder())
                     .build());
@@ -127,6 +140,7 @@ public class PortfolioService {
                         .portfolio(portfolio)
                         .repoId(r.getRepo_id())
                         .customTitle(r.getCustom_title())
+                        .description(r.getDescription())
                         .isVisible(visible)
                         .displayOrder(i)
                         .build());
@@ -203,6 +217,63 @@ public class PortfolioService {
     }
 
     /**
+     * PUT /api/portfolio/mileage – 전체 목록 교체 (repositories와 동일 패턴).
+     * 기존 연결을 모두 삭제한 뒤 요청 목록으로 재등록. 순서는 request 배열 순서.
+     */
+    public MileageListResponse putMileageList(Users user, java.util.List<MileageEntryRequest> request) {
+        Portfolio portfolio = getOrCreatePortfolio(user);
+        
+        // Validate request: check for duplicates and existence
+        if (request != null && !request.isEmpty()) {
+            java.util.Set<Long> seenIds = new java.util.HashSet<>();
+            for (MileageEntryRequest req : request) {
+                if (req == null || req.getMileage_id() == null) continue;
+                // Check for duplicates in request
+                if (seenIds.contains(req.getMileage_id())) {
+                    throw new IllegalArgumentException("중복된 mileage_id가 있습니다: " + req.getMileage_id());
+                }
+                seenIds.add(req.getMileage_id());
+                // Check that mileage_id exists in _sw_mileage_record
+                if (!etcSubitemRepository.existsById(req.getMileage_id().intValue())) {
+                    throw new DoNotExistException("마일리지 ID를 찾을 수 없습니다: " + req.getMileage_id());
+                }
+            }
+        }
+        
+        java.util.List<PortfolioMileageEntry> current = portfolioMileageEntryRepository.findByPortfolio_IdOrderByDisplayOrderAsc(portfolio.getId());
+        // 기존 연결 해제 시 원본 레코드의 is_linked_to_portfolio 플래그 해제
+        for (PortfolioMileageEntry e : current) {
+            etcSubitemRepository.findById(e.getMileageId().intValue())
+                    .ifPresent(record -> {
+                        record.setIsLinkedToPortfolio(false);
+                        etcSubitemRepository.save(record);
+                    });
+        }
+        portfolioMileageEntryRepository.deleteByPortfolio_Id(portfolio.getId());
+        portfolioMileageEntryRepository.flush();
+
+        if (request != null) {
+            int order = 0;
+            for (MileageEntryRequest req : request) {
+                if (req == null || req.getMileage_id() == null) continue;
+                PortfolioMileageEntry entry = PortfolioMileageEntry.builder()
+                        .portfolio(portfolio)
+                        .mileageId(req.getMileage_id())
+                        .additionalInfo(req.getAdditional_info())
+                        .displayOrder(order++)
+                        .build();
+                portfolioMileageEntryRepository.save(entry);
+                etcSubitemRepository.findById(req.getMileage_id().intValue())
+                        .ifPresent(record -> {
+                            record.setIsLinkedToPortfolio(true);
+                            etcSubitemRepository.save(record);
+                        });
+            }
+        }
+        return getMileageList(user);
+    }
+
+    /**
      * GET /api/portfolio/mileage – 연결된 마일리지 목록.
      */
     public MileageListResponse getMileageList(Users user) {
@@ -231,6 +302,14 @@ public class PortfolioService {
                 .displayOrder(nextOrder)
                 .build();
         entry = portfolioMileageEntryRepository.save(entry);
+
+        // 마일리지 원본 레코드에 포트폴리오 링크 플래그 설정 (옵션)
+        etcSubitemRepository.findById(request.getMileage_id().intValue())
+                .ifPresent(e -> {
+                    e.setIsLinkedToPortfolio(true);
+                    etcSubitemRepository.save(e);
+                });
+
         return toMileageEntryResponse(entry);
     }
 
@@ -254,15 +333,40 @@ public class PortfolioService {
         PortfolioMileageEntry entry = portfolioMileageEntryRepository.findByIdAndPortfolio_Id(id, portfolio.getId())
                 .orElseThrow(() -> new DoNotExistException("해당 마일리지 연결을 찾을 수 없습니다."));
         portfolioMileageEntryRepository.delete(entry);
+
+        // 마일리지 원본 레코드의 포트폴리오 링크 플래그 해제 (옵션)
+        etcSubitemRepository.findById(entry.getMileageId().intValue())
+                .ifPresent(e -> {
+                    e.setIsLinkedToPortfolio(false);
+                    etcSubitemRepository.save(e);
+                });
     }
 
-    private static MileageEntryResponse toMileageEntryResponse(PortfolioMileageEntry e) {
-        return MileageEntryResponse.builder()
+    private MileageEntryResponse toMileageEntryResponse(PortfolioMileageEntry e) {
+        // 기본 포트폴리오 링크 정보
+        MileageEntryResponse.MileageEntryResponseBuilder builder = MileageEntryResponse.builder()
                 .id(e.getId())
                 .mileage_id(e.getMileageId())
                 .additional_info(e.getAdditionalInfo())
-                .display_order(e.getDisplayOrder())
-                .build();
+                .display_order(e.getDisplayOrder());
+
+        // 원본 마일리지(_sw_mileage_record)에서 추가 정보 조회 (있으면 세팅)
+        etcSubitemRepository.findById(e.getMileageId().intValue())
+                .ifPresent(record -> {
+                    builder.subitemId(record.getSubitemId());
+                    builder.categoryId(record.getCategoryId());
+                    builder.semester(record.getSemester());
+                    builder.description1(record.getDescription1());
+
+                    // 이름 정보는 subitem/category 테이블 join으로 조회
+                    SubitemNamesDto names = subitemMapper.findNamesBySubitemId(record.getSubitemId());
+                    if (names != null) {
+                        builder.subitemName(names.getSubitemName());
+                        builder.categoryName(names.getCategoryName());
+                    }
+                });
+
+        return builder.build();
     }
 
     private static final java.util.List<String> DEFAULT_SECTION_ORDER = java.util.Arrays.asList("tech", "repo", "activities", "mileage");
