@@ -5,29 +5,25 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import javax.validation.constraints.NotBlank;
-import javax.validation.constraints.NotNull;
 import java.time.LocalDate;
 
 /**
- * POST /api/portfolio/activities (create) and PUT /api/portfolio/activities/{id} (update).
+ * One item in PATCH /api/portfolio/activities (full list).
+ * id is required; other fields are optional (only non-null are applied).
+ * Category: 1=activity, 2=project, 3=certificate, 4=camp, etc.
  */
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class ActivityRequest {
+public class ActivityPatchItemRequest {
 
-    @NotBlank
+    @javax.validation.constraints.NotNull
+    private Long id;
+
     private String title;
-
     private String description;
-
-    @NotNull
     private LocalDate start_date;
-
     private LocalDate end_date;
-
-    /** Category: 1=activity, 2=project, 3=certificate, 4=camp, etc. */
     private Integer category;
 }

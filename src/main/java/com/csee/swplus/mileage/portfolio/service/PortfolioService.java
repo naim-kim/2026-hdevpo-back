@@ -1,5 +1,7 @@
 package com.csee.swplus.mileage.portfolio.service;
 
+import com.csee.swplus.mileage.portfolio.dto.ActivityPatchItemRequest;
+import com.csee.swplus.mileage.portfolio.dto.ActivityPatchRequest;
 import com.csee.swplus.mileage.portfolio.dto.ActivityRequest;
 import com.csee.swplus.mileage.portfolio.dto.ActivityResponse;
 import com.csee.swplus.mileage.portfolio.dto.ActivitiesResponse;
@@ -174,6 +176,7 @@ public class PortfolioService {
                 .description(request.getDescription())
                 .startDate(request.getStart_date())
                 .endDate(request.getEnd_date())
+                .category(request.getCategory())
                 .displayOrder(nextOrder)
                 .build();
         activity = portfolioActivityRepository.save(activity);
@@ -191,8 +194,57 @@ public class PortfolioService {
         activity.setDescription(request.getDescription());
         activity.setStartDate(request.getStart_date());
         activity.setEndDate(request.getEnd_date());
+        activity.setCategory(request.getCategory());
         portfolioActivityRepository.save(activity);
         return toActivityResponse(activity);
+    }
+
+    /**
+     * PATCH /api/portfolio/activities/{id} – 활동 일부 수정 (null이 아닌 필드만 반영).
+     */
+    public ActivityResponse patchActivity(Users user, Long id, ActivityPatchRequest request) {
+        Portfolio portfolio = getOrCreatePortfolio(user);
+        PortfolioActivity activity = portfolioActivityRepository.findByIdAndPortfolio_Id(id, portfolio.getId())
+                .orElseThrow(() -> new DoNotExistException("해당 활동을 찾을 수 없습니다."));
+        if (request.getTitle() != null) {
+            activity.setTitle(request.getTitle());
+        }
+        if (request.getDescription() != null) {
+            activity.setDescription(request.getDescription());
+        }
+        if (request.getStart_date() != null) {
+            activity.setStartDate(request.getStart_date());
+        }
+        if (request.getEnd_date() != null) {
+            activity.setEndDate(request.getEnd_date());
+        }
+        if (request.getCategory() != null) {
+            activity.setCategory(request.getCategory());
+        }
+        portfolioActivityRepository.save(activity);
+        return toActivityResponse(activity);
+    }
+
+    /**
+     * PATCH /api/portfolio/activities – 전체 목록 일부 수정 (각 항목은 id로 식별, null이 아닌 필드만 반영).
+     */
+    public ActivitiesResponse patchActivities(Users user, java.util.List<ActivityPatchItemRequest> request) {
+        if (request == null || request.isEmpty()) {
+            return getActivities(user);
+        }
+        Portfolio portfolio = getOrCreatePortfolio(user);
+        for (ActivityPatchItemRequest item : request) {
+            if (item == null || item.getId() == null) continue;
+            PortfolioActivity activity = portfolioActivityRepository.findByIdAndPortfolio_Id(item.getId(), portfolio.getId()).orElse(null);
+            if (activity == null) continue;
+            if (item.getTitle() != null) activity.setTitle(item.getTitle());
+            if (item.getDescription() != null) activity.setDescription(item.getDescription());
+            if (item.getStart_date() != null) activity.setStartDate(item.getStart_date());
+            if (item.getEnd_date() != null) activity.setEndDate(item.getEnd_date());
+            if (item.getCategory() != null) activity.setCategory(item.getCategory());
+            portfolioActivityRepository.save(activity);
+        }
+        return getActivities(user);
     }
 
     /**
@@ -212,6 +264,7 @@ public class PortfolioService {
                 .description(a.getDescription())
                 .start_date(a.getStartDate())
                 .end_date(a.getEndDate())
+                .category(a.getCategory())
                 .display_order(a.getDisplayOrder())
                 .build();
     }

@@ -39,6 +39,10 @@ public class PortfolioActivity extends BaseTime {
     @Column(name = "end_date")
     private LocalDate endDate;
 
+    /** Category: 1=activity, 2=project, 3=certificate, 4=camp, etc. */
+    @Column(name = "category")
+    private Integer category;
+
     @Column(name = "display_order", nullable = false)
     @Builder.Default
     private Integer displayOrder = 0;
