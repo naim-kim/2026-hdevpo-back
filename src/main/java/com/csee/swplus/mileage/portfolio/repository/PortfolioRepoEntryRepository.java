@@ -5,11 +5,14 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface PortfolioRepoEntryRepository extends JpaRepository<PortfolioRepoEntry, Long> {
 
     List<PortfolioRepoEntry> findByPortfolio_IdOrderByDisplayOrderAsc(Long portfolioId);
+
+    Optional<PortfolioRepoEntry> findByIdAndPortfolio_Id(Long id, Long portfolioId);
 
     void deleteByPortfolio_Id(Long portfolioId);
 }

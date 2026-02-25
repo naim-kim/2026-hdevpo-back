@@ -11,6 +11,7 @@ import com.csee.swplus.mileage.portfolio.dto.MileageLinkRequest;
 import com.csee.swplus.mileage.portfolio.dto.MileageListResponse;
 import com.csee.swplus.mileage.portfolio.dto.RepoEntryRequest;
 import com.csee.swplus.mileage.portfolio.dto.RepoEntryResponse;
+import com.csee.swplus.mileage.portfolio.dto.RepoPatchRequest;
 import com.csee.swplus.mileage.portfolio.dto.RepositoriesResponse;
 import com.csee.swplus.mileage.portfolio.dto.SettingsResponse;
 import com.csee.swplus.mileage.portfolio.dto.TechStackResponse;
@@ -237,6 +238,70 @@ public class PortfolioService {
         }
 
         return RepositoriesResponse.builder().repositories(list).build();
+    }
+
+    /**
+     * PATCH /api/portfolio/repositories/{id} – 단일 레포 엔트리 일부 수정 (null이 아닌 필드만 반영).
+     */
+    public RepoEntryResponse patchRepository(Users user, Long id, RepoPatchRequest request) {
+        Portfolio portfolio = getOrCreatePortfolio(user);
+        PortfolioRepoEntry entry = portfolioRepoEntryRepository
+                .findByIdAndPortfolio_Id(id, portfolio.getId())
+                .orElseThrow(() -> new DoNotExistException("해당 레포를 찾을 수 없습니다."));
+
+        if (request.getCustom_title() != null) {
+            entry.setCustomTitle(request.getCustom_title());
+        }
+        if (request.getDescription() != null) {
+            entry.setDescription(request.getDescription());
+        }
+        if (request.getIs_visible() != null) {
+            entry.setIsVisible(request.getIs_visible());
+        }
+        if (request.getDisplay_order() != null) {
+            entry.setDisplayOrder(request.getDisplay_order());
+        }
+
+        portfolioRepoEntryRepository.save(entry);
+
+        // Enrich with latest GitHub info for this repo (optional, best-effort)
+        String name = null;
+        String htmlUrl = null;
+        String language = null;
+        String createdAt = null;
+        String updatedAt = null;
+
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> repo = restTemplate.getForObject(
+                    githubApiBaseUrl + "/repositories/" + entry.getRepoId(),
+                    Map.class);
+            if (repo != null) {
+                name = (String) repo.get("name");
+                htmlUrl = (String) repo.get("html_url");
+                language = (String) repo.get("language");
+                Object c = repo.get("created_at");
+                Object u = repo.get("updated_at");
+                createdAt = c != null ? c.toString() : null;
+                updatedAt = u != null ? u.toString() : null;
+            }
+        } catch (Exception ex) {
+            // ignore GitHub errors here; return DB fields only
+        }
+
+        return RepoEntryResponse.builder()
+                .id(entry.getId())
+                .repo_id(entry.getRepoId())
+                .custom_title(entry.getCustomTitle())
+                .description(entry.getDescription())
+                .is_visible(entry.getIsVisible())
+                .display_order(entry.getDisplayOrder())
+                .name(name)
+                .html_url(htmlUrl)
+                .language(language)
+                .created_at(createdAt)
+                .updated_at(updatedAt)
+                .build();
     }
 
     /**

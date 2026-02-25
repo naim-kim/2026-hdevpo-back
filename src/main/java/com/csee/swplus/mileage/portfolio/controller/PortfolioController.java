@@ -12,6 +12,8 @@ import com.csee.swplus.mileage.portfolio.dto.MileageLinkRequest;
 import com.csee.swplus.mileage.portfolio.dto.MileageListResponse;
 import com.csee.swplus.mileage.portfolio.dto.MileageUpdateRequest;
 import com.csee.swplus.mileage.portfolio.dto.RepoEntryRequest;
+import com.csee.swplus.mileage.portfolio.dto.RepoEntryResponse;
+import com.csee.swplus.mileage.portfolio.dto.RepoPatchRequest;
 import com.csee.swplus.mileage.portfolio.dto.RepositoriesResponse;
 import com.csee.swplus.mileage.portfolio.dto.SettingsPutRequest;
 import com.csee.swplus.mileage.portfolio.dto.SettingsResponse;
@@ -205,6 +207,19 @@ public class PortfolioController {
     public ResponseEntity<RepositoriesResponse> putRepositories(@Valid @RequestBody List<RepoEntryRequest> request) {
         Users user = getCurrentUser();
         return ResponseEntity.ok(portfolioService.putRepositories(user, request));
+    }
+
+    /**
+     * PATCH /api/portfolio/repositories/{id} – 단일 레포 엔트리 일부 수정.
+     * Body 예시: { "custom_title": "New title", "is_visible": true }
+     */
+    @PatchMapping("/repositories/{id}")
+    public ResponseEntity<RepoEntryResponse> patchRepository(
+            @PathVariable Long id,
+            @RequestBody RepoPatchRequest request) {
+        Users user = getCurrentUser();
+        return ResponseEntity.ok(
+                portfolioService.patchRepository(user, id, request != null ? request : new RepoPatchRequest()));
     }
 
     /**
