@@ -424,7 +424,8 @@ public class PortfolioService {
         return builder.build();
     }
 
-    private static final java.util.List<String> DEFAULT_SECTION_ORDER = java.util.Arrays.asList("tech", "repo", "activities", "mileage");
+    private static final java.util.List<String> DEFAULT_SECTION_ORDER =
+            java.util.Arrays.asList("tech", "repo", "activities", "certificates", "mileage");
 
     /**
      * GET /api/portfolio/settings – 섹션 순서 (유저 정보는 프론트에서 상단 고정).
