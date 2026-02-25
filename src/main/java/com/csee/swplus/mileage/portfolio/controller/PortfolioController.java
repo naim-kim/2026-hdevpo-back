@@ -2,6 +2,8 @@ package com.csee.swplus.mileage.portfolio.controller;
 
 import com.csee.swplus.mileage.auth.service.AuthService;
 import com.csee.swplus.mileage.portfolio.dto.ActivitiesResponse;
+import com.csee.swplus.mileage.portfolio.dto.ActivityPatchItemRequest;
+import com.csee.swplus.mileage.portfolio.dto.ActivityPatchRequest;
 import com.csee.swplus.mileage.portfolio.dto.ActivityRequest;
 import com.csee.swplus.mileage.portfolio.dto.ActivityResponse;
 import com.csee.swplus.mileage.portfolio.dto.MileageEntryRequest;
@@ -203,12 +205,13 @@ public class PortfolioController {
     }
 
     /**
-     * GET /api/portfolio/activities – 활동 목록.
+     * GET /api/portfolio/activities – 활동 목록. Optional: ?category=1&category=2 to filter by category (default: full list).
      */
     @GetMapping("/activities")
-    public ResponseEntity<ActivitiesResponse> getActivities() {
+    public ResponseEntity<ActivitiesResponse> getActivities(
+            @RequestParam(value = "category", required = false) List<Integer> categories) {
         Users user = getCurrentUser();
-        return ResponseEntity.ok(portfolioService.getActivities(user));
+        return ResponseEntity.ok(portfolioService.getActivities(user, categories));
     }
 
     /**
@@ -222,12 +225,31 @@ public class PortfolioController {
     }
 
     /**
-     * PUT /api/portfolio/activities/{id} – 활동 수정.
+     * PUT /api/portfolio/activities/{id} – 활동 전체 수정.
      */
     @PutMapping("/activities/{id}")
     public ResponseEntity<ActivityResponse> putActivity(@PathVariable Long id, @Valid @RequestBody ActivityRequest request) {
         Users user = getCurrentUser();
         return ResponseEntity.ok(portfolioService.updateActivity(user, id, request));
+    }
+
+    /**
+     * PATCH /api/portfolio/activities/{id} – 활동 일부 수정 (보내진 필드만 반영). Body: { "category": 2 }, { "title": "..." }, etc.
+     */
+    @PatchMapping("/activities/{id}")
+    public ResponseEntity<ActivityResponse> patchActivity(@PathVariable Long id, @RequestBody ActivityPatchRequest request) {
+        Users user = getCurrentUser();
+        return ResponseEntity.ok(portfolioService.patchActivity(user, id, request != null ? request : new ActivityPatchRequest()));
+    }
+
+    /**
+     * PATCH /api/portfolio/activities – 전체 목록 일부 수정. Body: [ { "id": 1, "category": 2 }, { "id": 2, "title": "..." }, ... ]
+     * 각 항목은 id로 식별되며, 보내진 필드만 반영됩니다.
+     */
+    @PatchMapping("/activities")
+    public ResponseEntity<ActivitiesResponse> patchActivities(@RequestBody List<ActivityPatchItemRequest> request) {
+        Users user = getCurrentUser();
+        return ResponseEntity.ok(portfolioService.patchActivities(user, request != null ? request : java.util.Collections.emptyList()));
     }
 
     /**
