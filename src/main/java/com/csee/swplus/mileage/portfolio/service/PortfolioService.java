@@ -310,6 +310,7 @@ public class PortfolioService {
     public RepositoriesResponse putRepositories(Users user, java.util.List<RepoEntryRequest> requests) {
         Portfolio portfolio = getOrCreatePortfolio(user);
         portfolioRepoEntryRepository.deleteByPortfolio_Id(portfolio.getId());
+        portfolioRepoEntryRepository.flush();  // Force DELETE before INSERT to avoid unique constraint violation
         if (requests != null) {
             for (int i = 0; i < requests.size(); i++) {
                 RepoEntryRequest r = requests.get(i);
