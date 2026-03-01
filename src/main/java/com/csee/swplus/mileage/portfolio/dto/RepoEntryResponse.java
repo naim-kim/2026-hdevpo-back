@@ -20,4 +20,11 @@ public class RepoEntryResponse {
     private String description;
     private Boolean is_visible;
     private Integer display_order;
+
+    // Live GitHub repo data (public API)
+    private String name;
+    private String html_url;
+    private String language;
+    private String created_at;
+    private String updated_at;
 }

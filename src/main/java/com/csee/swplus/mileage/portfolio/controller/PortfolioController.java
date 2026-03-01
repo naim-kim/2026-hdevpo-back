@@ -12,6 +12,8 @@ import com.csee.swplus.mileage.portfolio.dto.MileageLinkRequest;
 import com.csee.swplus.mileage.portfolio.dto.MileageListResponse;
 import com.csee.swplus.mileage.portfolio.dto.MileageUpdateRequest;
 import com.csee.swplus.mileage.portfolio.dto.RepoEntryRequest;
+import com.csee.swplus.mileage.portfolio.dto.RepoEntryResponse;
+import com.csee.swplus.mileage.portfolio.dto.RepoPatchRequest;
 import com.csee.swplus.mileage.portfolio.dto.RepositoriesResponse;
 import com.csee.swplus.mileage.portfolio.dto.SettingsPutRequest;
 import com.csee.swplus.mileage.portfolio.dto.SettingsResponse;
@@ -186,12 +188,17 @@ public class PortfolioController {
     }
 
     /**
-     * GET /api/portfolio/repositories – 노출 토글 + 커스텀 제목 목록.
+     * GET /api/portfolio/repositories – GitHub 레포 목록 + (선택된 레포에 한해) 커스텀 설정 정보.
+     * Optional: ?page=1&per_page=30 | ?selected_only=true (only added) | ?visible_only=true (only added + visible).
      */
     @GetMapping("/repositories")
-    public ResponseEntity<RepositoriesResponse> getRepositories() {
+    public ResponseEntity<RepositoriesResponse> getRepositories(
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "per_page", required = false) Integer perPage,
+            @RequestParam(value = "selected_only", required = false) Boolean selectedOnly,
+            @RequestParam(value = "visible_only", required = false) Boolean visibleOnly) {
         Users user = getCurrentUser();
-        return ResponseEntity.ok(portfolioService.getRepositories(user));
+        return ResponseEntity.ok(portfolioService.getRepositories(user, page, perPage, selectedOnly, visibleOnly));
     }
 
     /**
@@ -202,6 +209,19 @@ public class PortfolioController {
     public ResponseEntity<RepositoriesResponse> putRepositories(@Valid @RequestBody List<RepoEntryRequest> request) {
         Users user = getCurrentUser();
         return ResponseEntity.ok(portfolioService.putRepositories(user, request));
+    }
+
+    /**
+     * PATCH /api/portfolio/repositories/{id} – 단일 레포 엔트리 일부 수정.
+     * Body 예시: { "custom_title": "New title", "is_visible": true }
+     */
+    @PatchMapping("/repositories/{id}")
+    public ResponseEntity<RepoEntryResponse> patchRepository(
+            @PathVariable Long id,
+            @RequestBody RepoPatchRequest request) {
+        Users user = getCurrentUser();
+        return ResponseEntity.ok(
+                portfolioService.patchRepository(user, id, request != null ? request : new RepoPatchRequest()));
     }
 
     /**

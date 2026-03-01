@@ -11,6 +11,7 @@ import com.csee.swplus.mileage.portfolio.dto.MileageLinkRequest;
 import com.csee.swplus.mileage.portfolio.dto.MileageListResponse;
 import com.csee.swplus.mileage.portfolio.dto.RepoEntryRequest;
 import com.csee.swplus.mileage.portfolio.dto.RepoEntryResponse;
+import com.csee.swplus.mileage.portfolio.dto.RepoPatchRequest;
 import com.csee.swplus.mileage.portfolio.dto.RepositoriesResponse;
 import com.csee.swplus.mileage.portfolio.dto.SettingsResponse;
 import com.csee.swplus.mileage.portfolio.dto.TechStackResponse;
@@ -24,13 +25,21 @@ import com.csee.swplus.mileage.portfolio.repository.PortfolioActivityRepository;
 import com.csee.swplus.mileage.portfolio.repository.PortfolioMileageEntryRepository;
 import com.csee.swplus.mileage.portfolio.repository.PortfolioRepository;
 import com.csee.swplus.mileage.portfolio.repository.PortfolioRepoEntryRepository;
+import com.csee.swplus.mileage.profile.entity.Profile;
+import com.csee.swplus.mileage.profile.repository.ProfileRepository;
 import com.csee.swplus.mileage.subitem.dto.SubitemNamesDto;
 import com.csee.swplus.mileage.subitem.mapper.SubitemMapper;
 import com.csee.swplus.mileage.user.entity.Users;
 import com.csee.swplus.mileage.auth.exception.DoNotExistException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.web.util.UriComponentsBuilder;
+
+import java.util.HashMap;
+import java.util.Map;
 
 @Service
 @Transactional
@@ -43,6 +52,12 @@ public class PortfolioService {
     private final PortfolioMileageEntryRepository portfolioMileageEntryRepository;
     private final EtcSubitemRepository etcSubitemRepository;
     private final SubitemMapper subitemMapper;
+
+    private final ProfileRepository profileRepository;
+    private final RestTemplate restTemplate;
+
+    @Value("${github.api-base-url}")
+    private String githubApiBaseUrl;
 
     /**
      * Returns the portfolio for the user, creating one if it does not exist.
@@ -109,23 +124,192 @@ public class PortfolioService {
     }
 
     /**
-     * GET /api/portfolio/repositories – 노출 설정 + 커스텀 제목 목록.
+     * GET /api/portfolio/repositories – GitHub 레포 목록 + (선택된 레포에 한해) 커스텀 설정 정보.
+     * Overload for internal callers (PUT, etc.): no filters.
      */
     public RepositoriesResponse getRepositories(Users user) {
-        Portfolio portfolio = getOrCreatePortfolio(user);
-        java.util.List<PortfolioRepoEntry> entries = portfolioRepoEntryRepository.findByPortfolio_IdOrderByDisplayOrderAsc(portfolio.getId());
-        java.util.List<RepoEntryResponse> list = new java.util.ArrayList<>();
-        for (PortfolioRepoEntry e : entries) {
-            list.add(RepoEntryResponse.builder()
-                    .id(e.getId())
-                    .repo_id(e.getRepoId())
-                    .custom_title(e.getCustomTitle())
-                    .description(e.getDescription())
-                    .is_visible(e.getIsVisible())
-                    .display_order(e.getDisplayOrder())
-                    .build());
+        return getRepositories(user, 1, 100, null, null);
+    }
+
+    /**
+     * GET /api/portfolio/repositories – GitHub 레포 목록 + (선택된 레포에 한해) 커스텀 설정 정보.
+     * Pagination: ?page=&per_page=. Filters: ?selected_only=true (only added), ?visible_only=true (added + visible).
+     */
+    public RepositoriesResponse getRepositories(Users user, Integer page, Integer perPage,
+            Boolean selectedOnly, Boolean visibleOnly) {
+        int p = (page == null || page < 1) ? 1 : page;
+        int limit = (perPage == null || perPage < 1) ? 30 : perPage;
+        if (limit > 100) {
+            limit = 100;
         }
+
+        Portfolio portfolio = getOrCreatePortfolio(user);
+        java.util.List<PortfolioRepoEntry> entries =
+                portfolioRepoEntryRepository.findByPortfolio_IdOrderByDisplayOrderAsc(portfolio.getId());
+
+        // Map of selected repos: GitHub repo_id -> PortfolioRepoEntry (custom settings)
+        Map<Long, PortfolioRepoEntry> byRepoId = new HashMap<>();
+        for (PortfolioRepoEntry e : entries) {
+            byRepoId.put(e.getRepoId(), e);
+        }
+
+        // Find GitHub username from Profile (set by GitHub OAuth)
+        String githubUsername = null;
+        Profile profile = profileRepository.findBySnum(user.getUniqueId()).orElse(null);
+        if (profile != null) {
+            githubUsername = profile.getGithubUsername();
+        }
+
+        java.util.List<RepoEntryResponse> list = new java.util.ArrayList<>();
+
+        if (githubUsername != null && !githubUsername.isEmpty()) {
+            try {
+                String url = UriComponentsBuilder
+                        .fromHttpUrl(githubApiBaseUrl + "/users/" + githubUsername + "/repos")
+                        .queryParam("type", "owner")
+                        .queryParam("sort", "updated")
+                        .queryParam("direction", "desc")
+                        .queryParam("per_page", limit)
+                        .queryParam("page", p)
+                        .toUriString();
+
+                @SuppressWarnings("unchecked")
+                Map<String, Object>[] repos = restTemplate.getForObject(url, Map[].class);
+
+                if (repos != null) {
+                    for (Map<String, Object> repo : repos) {
+                        if (repo == null) continue;
+
+                        Object idObj = repo.get("id");
+                        if (!(idObj instanceof Number)) continue;
+                        Long repoId = ((Number) idObj).longValue();
+
+                        PortfolioRepoEntry selected = byRepoId.get(repoId);
+
+                        String name = (String) repo.get("name");
+                        String htmlUrl = (String) repo.get("html_url");
+                        String language = (String) repo.get("language");
+                        Object c = repo.get("created_at");
+                        Object u = repo.get("updated_at");
+                        String createdAt = c != null ? c.toString() : null;
+                        String updatedAt = u != null ? u.toString() : null;
+
+                        list.add(RepoEntryResponse.builder()
+                                // Our service metadata (only if selected)
+                                .id(selected != null ? selected.getId() : null)
+                                .repo_id(repoId)
+                                .custom_title(selected != null ? selected.getCustomTitle() : null)
+                                .description(selected != null ? selected.getDescription() : null)
+                                .is_visible(selected != null ? selected.getIsVisible() : false)
+                                .display_order(selected != null ? selected.getDisplayOrder() : 0)
+                                // GitHub live data
+                                .name(name)
+                                .html_url(htmlUrl)
+                                .language(language)
+                                .created_at(createdAt)
+                                .updated_at(updatedAt)
+                                .build());
+                    }
+                }
+            } catch (Exception ex) {
+                // If GitHub list call fails, fall back to DB-only selected repos (no GitHub fields).
+                for (PortfolioRepoEntry e : entries) {
+                    list.add(RepoEntryResponse.builder()
+                            .id(e.getId())
+                            .repo_id(e.getRepoId())
+                            .custom_title(e.getCustomTitle())
+                            .description(e.getDescription())
+                            .is_visible(e.getIsVisible())
+                            .display_order(e.getDisplayOrder())
+                            .build());
+                }
+            }
+        } else {
+            // No GitHub username connected: just return selected repos as before.
+            for (PortfolioRepoEntry e : entries) {
+                list.add(RepoEntryResponse.builder()
+                        .id(e.getId())
+                        .repo_id(e.getRepoId())
+                        .custom_title(e.getCustomTitle())
+                        .description(e.getDescription())
+                        .is_visible(e.getIsVisible())
+                        .display_order(e.getDisplayOrder())
+                        .build());
+            }
+        }
+
+        // Optional filters: selected_only (id != null) or visible_only (id != null && is_visible)
+        if (Boolean.TRUE.equals(visibleOnly)) {
+            list.removeIf(r -> r.getId() == null || !Boolean.TRUE.equals(r.getIs_visible()));
+        } else if (Boolean.TRUE.equals(selectedOnly)) {
+            list.removeIf(r -> r.getId() == null);
+        }
+
         return RepositoriesResponse.builder().repositories(list).build();
+    }
+
+    /**
+     * PATCH /api/portfolio/repositories/{id} – 단일 레포 엔트리 일부 수정 (null이 아닌 필드만 반영).
+     */
+    public RepoEntryResponse patchRepository(Users user, Long id, RepoPatchRequest request) {
+        Portfolio portfolio = getOrCreatePortfolio(user);
+        PortfolioRepoEntry entry = portfolioRepoEntryRepository
+                .findByIdAndPortfolio_Id(id, portfolio.getId())
+                .orElseThrow(() -> new DoNotExistException("해당 레포를 찾을 수 없습니다."));
+
+        if (request.getCustom_title() != null) {
+            entry.setCustomTitle(request.getCustom_title());
+        }
+        if (request.getDescription() != null) {
+            entry.setDescription(request.getDescription());
+        }
+        if (request.getIs_visible() != null) {
+            entry.setIsVisible(request.getIs_visible());
+        }
+        if (request.getDisplay_order() != null) {
+            entry.setDisplayOrder(request.getDisplay_order());
+        }
+
+        portfolioRepoEntryRepository.save(entry);
+
+        // Enrich with latest GitHub info for this repo (optional, best-effort)
+        String name = null;
+        String htmlUrl = null;
+        String language = null;
+        String createdAt = null;
+        String updatedAt = null;
+
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> repo = restTemplate.getForObject(
+                    githubApiBaseUrl + "/repositories/" + entry.getRepoId(),
+                    Map.class);
+            if (repo != null) {
+                name = (String) repo.get("name");
+                htmlUrl = (String) repo.get("html_url");
+                language = (String) repo.get("language");
+                Object c = repo.get("created_at");
+                Object u = repo.get("updated_at");
+                createdAt = c != null ? c.toString() : null;
+                updatedAt = u != null ? u.toString() : null;
+            }
+        } catch (Exception ex) {
+            // ignore GitHub errors here; return DB fields only
+        }
+
+        return RepoEntryResponse.builder()
+                .id(entry.getId())
+                .repo_id(entry.getRepoId())
+                .custom_title(entry.getCustomTitle())
+                .description(entry.getDescription())
+                .is_visible(entry.getIsVisible())
+                .display_order(entry.getDisplayOrder())
+                .name(name)
+                .html_url(htmlUrl)
+                .language(language)
+                .created_at(createdAt)
+                .updated_at(updatedAt)
+                .build();
     }
 
     /**
@@ -134,6 +318,7 @@ public class PortfolioService {
     public RepositoriesResponse putRepositories(Users user, java.util.List<RepoEntryRequest> requests) {
         Portfolio portfolio = getOrCreatePortfolio(user);
         portfolioRepoEntryRepository.deleteByPortfolio_Id(portfolio.getId());
+        portfolioRepoEntryRepository.flush();  // Force DELETE before INSERT to avoid unique constraint violation
         if (requests != null) {
             for (int i = 0; i < requests.size(); i++) {
                 RepoEntryRequest r = requests.get(i);
