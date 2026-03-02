@@ -21,6 +21,7 @@ import com.csee.swplus.mileage.portfolio.dto.TechStackPutRequest;
 import com.csee.swplus.mileage.portfolio.dto.TechStackResponse;
 import com.csee.swplus.mileage.portfolio.dto.UserInfoPatchRequest;
 import com.csee.swplus.mileage.portfolio.dto.UserInfoResponse;
+import com.csee.swplus.mileage.portfolio.service.PortfolioHtmlExportService;
 import com.csee.swplus.mileage.portfolio.service.PortfolioService;
 import com.csee.swplus.mileage.user.entity.Users;
 import lombok.RequiredArgsConstructor;
@@ -56,6 +57,7 @@ public class PortfolioController {
 
     private final AuthService authService;
     private final PortfolioService portfolioService;
+    private final PortfolioHtmlExportService htmlExportService;
 
     @Value("${file.portfolio-profile-upload-dir:${file.profile-upload-dir:./uploads/profile}}")
     private String profileUploadDir;
@@ -329,6 +331,31 @@ public class PortfolioController {
         Users user = getCurrentUser();
         portfolioService.unlinkMileage(user, id);
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * GET /api/portfolio/export/html – 포트폴리오 HTML 단일 파일 export (인쇄용, 공유용).
+     */
+    @GetMapping(value = "/export/html", produces = MediaType.TEXT_HTML_VALUE)
+    public ResponseEntity<String> exportHtml() {
+        Users user = getCurrentUser();
+        String html = htmlExportService.generateHtml(user);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"portfolio.html\"")
+                .body(html);
+    }
+
+    /**
+     * GET /api/portfolio/export/prompt – 전체 LLM 프롬프트(ROLE, TASK, STEP 1-5)에 사용자 데이터를 STEP 2에 채워 반환.
+     * 풀 테스트용 – 이 텍스트를 그대로 LLM에 붙여 넣어 포트폴리오 HTML 생성 가능.
+     */
+    @GetMapping(value = "/export/prompt", produces = MediaType.TEXT_PLAIN_VALUE)
+    public ResponseEntity<String> exportPrompt() {
+        Users user = getCurrentUser();
+        String fullPrompt = htmlExportService.buildFullPrompt(user);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"portfolio-prompt.txt\"")
+                .body(fullPrompt);
     }
 
     /**
