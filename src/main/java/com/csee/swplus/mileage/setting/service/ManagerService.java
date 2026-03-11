@@ -64,10 +64,14 @@ public class ManagerService {
     }
 
     /**
-     * Returns global maintenance flag from latest manager setting row.
-     * Active only when:
-     * - maintenance_mode = 1 AND
-     * - now is between read_start and read_end.
+     * 전역 점검 모드 여부를 반환한다.
+     *
+     * - 기준 행: 가장 최근(_sw_manager_setting) 설정 행 (id DESC 1건)
+     * - 점검 ON 조건:
+     *     1) maintenance_mode = 1
+     *     2) 현재 시간이 read_start ~ read_end 범위 안에 있는 경우
+     *
+     * 위 조건 중 하나라도 만족하지 않으면 false 를 반환한다.
      */
     public boolean isMaintenanceMode() {
         try {
