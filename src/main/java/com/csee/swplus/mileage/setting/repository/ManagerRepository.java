@@ -68,11 +68,11 @@ public interface ManagerRepository extends JpaRepository<Manager, Long> {
                 "         WHEN maintenance_mode = 1 " +
                 "              AND (read_start IS NULL OR read_end IS NULL " +
                 "                   OR NOW() BETWEEN read_start AND read_end) " +
-                "         THEN TRUE ELSE FALSE " +
+                "         THEN 1 ELSE 0 " +
                 "       END " +
                 "FROM _sw_manager_setting " +
                 "WHERE id = 2",
         nativeQuery = true
     )
-    Optional<Boolean> isMaintenanceActive();
+    Optional<Integer> isMaintenanceActive();
 }

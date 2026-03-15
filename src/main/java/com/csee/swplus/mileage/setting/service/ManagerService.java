@@ -73,8 +73,8 @@ public class ManagerService {
      */
     public boolean isMaintenanceMode() {
         try {
-            java.util.Optional<Boolean> active = managerRepository.isMaintenanceActive();
-            boolean result = active.orElse(false);
+            java.util.Optional<Integer> active = managerRepository.isMaintenanceActive();
+            boolean result = active.map(v -> v != null && v != 0).orElse(false);
             log.info("maintenanceActiveFromDB={}, resolvedMaintenanceMode={}", active, result);
             return result;
         } catch (Exception e) {

@@ -5,6 +5,9 @@ import com.csee.swplus.mileage.setting.dto.AnnouncementResponse;
 import com.csee.swplus.mileage.setting.dto.ContactResponse;
 import com.csee.swplus.mileage.setting.dto.MaintenanceResponse;
 import com.csee.swplus.mileage.setting.dto.ManagerResponse;
+import com.csee.swplus.mileage.setting.entity.SwManagerSetting;
+import com.csee.swplus.mileage.setting.repository.ManagerRepository;
+import com.csee.swplus.mileage.setting.repository.SwManagerSettingRepository;
 import com.csee.swplus.mileage.setting.entity.Manager;
 import com.csee.swplus.mileage.setting.service.ManagerService;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +28,8 @@ import java.util.Map;
 @Slf4j
 public class ManagerController {
     private final ManagerService managerService;
+    private final ManagerRepository managerRepository;
+    private final SwManagerSettingRepository swManagerSettingRepository;
 
     @Value("${custom.jwt.secret}")
     private String jwtSecret;
@@ -71,7 +76,9 @@ public class ManagerController {
      */
     @GetMapping("/maintenance")
     public ResponseEntity<MaintenanceResponse> getMaintenance(HttpServletRequest request) {
-        boolean maintenanceMode = managerService.isMaintenanceMode();
+        // Use DB-driven evaluation directly to avoid any mismatch (0/1 from DB)
+        Integer active = managerRepository.isMaintenanceActive().orElse(0);
+        boolean maintenanceMode = active != null && active != 0;
         String message = managerService.getMaintenanceMessage();
         String eta = managerService.getMaintenanceEta();
 
@@ -89,16 +96,32 @@ public class ManagerController {
     }
 
     /**
-     * Debug endpoint to inspect raw maintenance values.
-     * Returns both the computed maintenanceMode and the raw DB result.
+     * Debug endpoint to inspect raw maintenance values that the backend actually sees.
+     * Helps verify DB wiring without server log access.
      */
     @GetMapping("/maintenance/debug")
     public ResponseEntity<Map<String, Object>> getMaintenanceDebug() {
         Map<String, Object> debug = new HashMap<>();
+
+        // 1) Computed value used by /maintenance
         boolean computed = managerService.isMaintenanceMode();
         debug.put("maintenanceMode", computed);
-        // We can't see server logs, so expose the same boolean again as dbActive for Swagger testing
-        debug.put("dbActive", computed);
+
+        // 2) Raw row (id = 2) as seen by JPA
+        SwManagerSetting row = swManagerSettingRepository.findById(2L).orElse(null);
+        if (row == null) {
+            debug.put("rowExists", false);
+        } else {
+            debug.put("rowExists", true);
+            debug.put("rowId", 2);
+            debug.put("maintenance_mode", row.getMaintenanceMode());
+            debug.put("read_start", row.getReadStart());
+            debug.put("read_end", row.getReadEnd());
+        }
+
+        // 3) Direct DB evaluation via isMaintenanceActive() (0/1)
+        debug.put("dbActive", managerRepository.isMaintenanceActive().orElse(0));
+
         return ResponseEntity.ok(debug);
     }
 
