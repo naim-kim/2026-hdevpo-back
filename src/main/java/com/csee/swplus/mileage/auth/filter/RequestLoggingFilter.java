@@ -16,11 +16,18 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * Logs HTTP method, path, status, and duration for each request.
  * Registered as a servlet filter with highest precedence (runs first).
+ * Applies to all paths including /api/mileage/**, /mileage/**, /milestone25_1/**, etc.
  */
 @Slf4j
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class RequestLoggingFilter extends org.springframework.web.filter.OncePerRequestFilter {
+
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        // Log every request - never skip
+        return false;
+    }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
@@ -33,10 +40,13 @@ public class RequestLoggingFilter extends org.springframework.web.filter.OncePer
             long durationMs = (System.nanoTime() - startNs) / 1_000_000;
             String method = request.getMethod();
             String path = request.getRequestURI();
+            String query = request.getQueryString();
+            String pathWithQuery = (query != null && !query.isEmpty()) ? path + "?" + query : path;
             int status = wrapper.getCapturedStatus();
-            log.info("{} {} {} {}ms", method, path, status, durationMs);
+            log.info("{} {} {} {}ms", method, pathWithQuery, status, durationMs);
         }
     }
+
 
     /**
      * Wraps the response to capture the HTTP status code.
