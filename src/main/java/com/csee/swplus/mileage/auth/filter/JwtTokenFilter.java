@@ -46,15 +46,16 @@ public class JwtTokenFilter extends OncePerRequestFilter {
             "/api/mileage/github/callback$",
             "/milestone25_1/api/mileage/github/callback$",
 
-            // Swagger paths (with or without context path)
-            "^/swagger-ui",
-            "^/v3/api-docs",
+            // Swagger paths (protected by SwaggerBasicAuthFilter)
+            "^/swagger-ui(/.*)?",
+            "^/v3/api-docs(/.*)?",
             "^/swagger-resources",
             "^/webjars",
-            "^/milestone25_1/swagger-ui",
-            "^/milestone25_1/v3/api-docs",
+            "^/milestone25_1/swagger-ui(/.*)?",
+            "^/milestone25_1/v3/api-docs(/.*)?",
             "^/milestone25_1/swagger-resources",
-            "^/milestone25_1/webjars");
+            "^/milestone25_1/webjars"
+    );
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
