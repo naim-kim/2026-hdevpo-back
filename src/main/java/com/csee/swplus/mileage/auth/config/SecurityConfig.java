@@ -30,108 +30,119 @@ import java.util.List;
 @RequiredArgsConstructor
 @Slf4j
 public class SecurityConfig {
-    private final AuthService authService;
+        private final AuthService authService;
 
-    @Value("${custom.host.client-walab:http://walab.handong.edu}")
-    private String client_walab;
+        @Value("${custom.host.client-walab:http://walab.handong.edu}")
+        private String client_walab;
 
-    @Value("${custom.host.client-local:http://localhost:5173}")
-    private String client_local;
+        @Value("${custom.host.client-local:http://localhost:5173}")
+        private String client_local;
 
-    @Value("${custom.host.client-walab-https:https://walab.info}")
-    private String client_walab_https;
+        @Value("${custom.host.client-walab-https:https://walab.info}")
+        private String client_walab_https;
 
-    @Value("${custom.jwt.secret}")
-    private String SECRET_KEY;
+        @Value("${custom.jwt.secret}")
+        private String SECRET_KEY;
 
-    @Value("${swagger.auth.user:admin}")
-    private String swaggerUser;
+        @Value("${swagger.auth.user:admin}")
+        private String swaggerUser;
 
-    @Value("${swagger.auth.password:changeme}")
-    private String swaggerPassword;
+        @Value("${swagger.auth.password:changeme}")
+        private String swaggerPassword;
 
-    @PostConstruct
-    public void init() {
-        log.info("🚀 Allowed CORS Clients: {} {}", client_walab, client_local);
-    }
+        @PostConstruct
+        public void init() {
+                log.info("🚀 Allowed CORS Clients: {} {}", client_walab, client_local);
+        }
 
-    /**
-     * Swagger paths: use httpBasic so browser shows auth dialog.
-     * Higher priority (Order 1) so it runs before the main API chain.
-     */
-    @Bean
-    @Order(1)
-    public SecurityFilterChain swaggerSecurityFilterChain(HttpSecurity http) throws Exception {
-        http
-                .requestMatchers()
-                .antMatchers("/mileage/swagger-ui/**", "/mileage/swagger-ui.html",
-                        "/mileage/v3/api-docs/**", "/swagger-ui/**", "/v3/api-docs/**")
-                .and()
-                .authorizeRequests(auth -> auth.anyRequest().authenticated())
-                .httpBasic()
-                .and()
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .csrf().disable();
+        /**
+         * Swagger paths: use httpBasic so browser shows auth dialog.
+         * Higher priority (Order 1) so it runs before the main API chain.
+         */
+        @Bean
+        @Order(1)
+        public SecurityFilterChain swaggerSecurityFilterChain(HttpSecurity http) throws Exception {
+                http
+                                .requestMatchers()
+                                .antMatchers("/milestone25_1/swagger-ui/**", "/milestone25_1/swagger-ui.html",
+                                                "/milestone25_1/v3/api-docs/**", "/swagger-ui/**", "/v3/api-docs/**")
+                                .and()
+                                .authorizeRequests(auth -> auth.anyRequest().authenticated())
+                                .httpBasic()
+                                .and()
+                                .sessionManagement(session -> session
+                                                .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                                .csrf().disable();
 
-        return http.build();
-    }
+                return http.build();
+        }
 
-    @Bean
-    public org.springframework.security.core.userdetails.UserDetailsService userDetailsService() {
-        org.springframework.security.core.userdetails.UserDetails swaggerUserDetails =
-                org.springframework.security.core.userdetails.User.builder()
-                        .username(swaggerUser)
-                        .password("{noop}" + swaggerPassword)
-                        .roles("SWAGGER")
-                        .build();
-        return new org.springframework.security.provisioning.InMemoryUserDetailsManager(swaggerUserDetails);
-    }
+        @Bean
+        public org.springframework.security.core.userdetails.UserDetailsService userDetailsService() {
+                org.springframework.security.core.userdetails.UserDetails swaggerUserDetails = org.springframework.security.core.userdetails.User
+                                .builder()
+                                .username(swaggerUser)
+                                .password("{noop}" + swaggerPassword)
+                                .roles("SWAGGER")
+                                .build();
+                return new org.springframework.security.provisioning.InMemoryUserDetailsManager(swaggerUserDetails);
+        }
 
-    @Bean
-    @Order(2)
-    public SecurityFilterChain apiSecurityFilterChain(HttpSecurity http) throws Exception {
-        Key key = JwtUtil.getSigningKey(SECRET_KEY);
-        http
-                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                .csrf(csrf -> csrf.disable())
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .headers(headers -> headers
-                        .httpStrictTransportSecurity(hsts -> hsts
-                                .includeSubDomains(true)
-                                .maxAgeInSeconds(31536000))
-                        .frameOptions(frame -> frame.deny()))
-                .authorizeRequests(auth -> auth
-                        .antMatchers("/api/mileage/auth/**", "/mileage/api/mileage/auth/**",
-                                "/api/mileage/share/**", "/mileage/api/mileage/share/**",
-                                "/api/mileage/contact", "/mileage/api/mileage/contact",
-                                "/api/mileage/announcement", "/mileage/api/mileage/announcement",
-                                "/api/mileage/maintenance", "/mileage/api/mileage/maintenance",
-                                "/api/mileage/profile/image/**", "/mileage/api/mileage/profile/image/**",
-                                "/api/mileage/project/image/**", "/mileage/api/mileage/project/image/**",
-                                "/api/mileage/github/callback", "/mileage/api/mileage/github/callback")
-                        .permitAll()
-                        .antMatchers("/api/mileage/**", "/mileage/api/mileage/**").authenticated())
-                .addFilterBefore(new ExceptionHandlerFilter(), UsernamePasswordAuthenticationFilter.class)
-                .addFilterBefore(new JwtTokenFilter(authService, key), UsernamePasswordAuthenticationFilter.class);
+        @Bean
+        @Order(2)
+        public SecurityFilterChain apiSecurityFilterChain(HttpSecurity http) throws Exception {
+                Key key = JwtUtil.getSigningKey(SECRET_KEY);
+                http
+                                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                                .csrf(csrf -> csrf.disable())
+                                .sessionManagement(session -> session
+                                                .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                                .headers(headers -> headers
+                                                .httpStrictTransportSecurity(hsts -> hsts
+                                                                .includeSubDomains(true)
+                                                                .maxAgeInSeconds(31536000))
+                                                .frameOptions(frame -> frame.deny()))
+                                .authorizeRequests(auth -> auth
+                                                .antMatchers("/api/mileage/auth/**", "/milestone25_1/api/mileage/auth/**",
+                                                                "/api/mileage/share/**",
+                                                                "/milestone25_1/api/mileage/share/**",
+                                                                "/api/mileage/contact", "/milestone25_1/api/mileage/contact",
+                                                                "/api/mileage/announcement",
+                                                                "/milestone25_1/api/mileage/announcement",
+                                                                "/api/mileage/maintenance",
+                                                                "/milestone25_1/api/mileage/maintenance",
+                                                                "/api/mileage/profile/image/**",
+                                                                "/milestone25_1/api/mileage/profile/image/**",
+                                                                "/api/mileage/project/image/**",
+                                                                "/milestone25_1/api/mileage/project/image/**",
+                                                                "/api/mileage/github/callback",
+                                                                "/milestone25_1/api/mileage/github/callback")
+                                                .permitAll()
+                                                .antMatchers("/api/mileage/**", "/milestone25_1/api/mileage/**")
+                                                .authenticated())
+                                .addFilterBefore(new ExceptionHandlerFilter(),
+                                                UsernamePasswordAuthenticationFilter.class)
+                                .addFilterBefore(new JwtTokenFilter(authService, key),
+                                                UsernamePasswordAuthenticationFilter.class);
 
-        return http.build();
-    }
+                return http.build();
+        }
 
-    @Bean
-    public CorsConfigurationSource corsConfigurationSource() {
-        CorsConfiguration config = new CorsConfiguration();
-        List<String> allowedOrigins = new ArrayList<>();
-        allowedOrigins.add(client_local);
-        allowedOrigins.add(client_walab);
-        allowedOrigins.add(client_walab_https);
-        config.setAllowedOrigins(allowedOrigins);
-        config.setAllowedMethods(Arrays.asList("POST", "GET", "PATCH", "DELETE", "PUT"));
-        config.setAllowedHeaders(Arrays.asList("*"));
-        config.setAllowCredentials(true);
-        config.setExposedHeaders(Arrays.asList("Authorization", "Set-Cookie"));
-        config.setMaxAge(3600L);
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", config);
-        return source;
-    }
+        @Bean
+        public CorsConfigurationSource corsConfigurationSource() {
+                CorsConfiguration config = new CorsConfiguration();
+                List<String> allowedOrigins = new ArrayList<>();
+                allowedOrigins.add(client_local);
+                allowedOrigins.add(client_walab);
+                allowedOrigins.add(client_walab_https);
+                config.setAllowedOrigins(allowedOrigins);
+                config.setAllowedMethods(Arrays.asList("POST", "GET", "PATCH", "DELETE", "PUT"));
+                config.setAllowedHeaders(Arrays.asList("*"));
+                config.setAllowCredentials(true);
+                config.setExposedHeaders(Arrays.asList("Authorization", "Set-Cookie"));
+                config.setMaxAge(3600L);
+                UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+                source.registerCorsConfiguration("/**", config);
+                return source;
+        }
 }

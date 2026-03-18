@@ -54,8 +54,9 @@ public class JwtTokenFilter extends OncePerRequestFilter {
             "^/milestone25_1/swagger-ui(/.*)?",
             "^/milestone25_1/v3/api-docs(/.*)?",
             "^/milestone25_1/swagger-resources",
-            "^/milestone25_1/webjars"
-    );
+            "^/milestone25_1/webjars",
+            // Actuator
+            "^/milestone25_1/actuator(/.*)?");
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
