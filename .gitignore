@@ -55,9 +55,6 @@ Users/*
 *.crt
 *.key
 
-### Configuration ###
-config/
-
 ### Environment Variables ###
 .env
 .env.*
@@ -80,7 +77,6 @@ Thumbs.db
 *.db
 *.sqlite
 data/
-
 
 src/main/java/com/csee/swplus/mileage/auth/controller/AuthController.java
 
