@@ -1,15 +1,45 @@
-## #️⃣ 연관된 이슈
+## Description
 
-> ex) #이슈번호, #이슈번호
+<!-- Summarize the changes and rationale. Include impact and approach. -->
 
-## 📝 작업 내용
+## Type of Change
 
-> 이번 PR에서 작업한 내용을 간략히 설명해주세요(이미지 첨부 가능)
+- [ ] Bug fix (non-breaking change that fixes an issue)
+- [ ] New feature (non-breaking change that adds functionality)
+- [ ] Breaking change (fix or feature that would change existing behavior)
+- [ ] Refactoring (no functional changes)
+- [ ] Documentation update
+- [ ] Other (please describe)
 
-### 스크린샷 (선택)
+## Changes Made
 
-## 💬 리뷰 요구사항(선택)
+<!-- Bullet-point list of specific modifications -->
 
-> 리뷰어가 특별히 봐주었으면 하는 부분이 있다면 작성해주세요
->
-> ex) 메서드 XXX의 이름을 더 잘 짓고 싶은데 혹시 좋은 명칭이 있을까요?
+- 
+- 
+
+## How to Test
+
+<!-- Steps for reviewers to verify the change -->
+
+1. 
+2. 
+3. 
+
+## Related Issues
+
+<!-- Link to related issues. Use "Closes #123" to auto-close on merge -->
+
+Closes #
+
+## Checklist
+
+- [ ] Code follows project style guidelines
+- [ ] Self-reviewed the changes
+- [ ] Tests pass locally (if applicable)
+- [ ] Documentation updated (if applicable)
+- [ ] No new warnings introduced
+
+## Additional Notes
+
+<!-- Optional: Screenshots, breaking changes, or review focus areas -->
