@@ -13,7 +13,7 @@
         If no matching row is found, returns '기타' (Other).
 
         HOW THE MATCHING WORKS:
-        -----------------------
+        ======================
         - Blank/NULL in the lookup table = "match any" (wildcard).
         - school:  Matches if r.school is blank OR equals the user's department.
         - major_1: Matches if r.major_1 is blank OR user's major1 starts with r.major_1 (prefix)
@@ -21,7 +21,7 @@
         - major_2: Same logic as major_1 for the second major field.
 
         MATCH PRIORITY (ORDER BY):
-        --------------------------
+        ==========================
         Rows are sorted so the MOST SPECIFIC match wins:
         - Count non-empty columns in the lookup row (school, major_1, major_2).
         - Higher count = more specific (e.g. school+major1+major2 > school only).
