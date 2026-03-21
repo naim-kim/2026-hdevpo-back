@@ -36,4 +36,10 @@ public class RepoEntryResponse {
     private String visibility;
     /** Owner login (user or org) */
     private String owner;
+    /** Total commit count on default branch (from GitHub API). Null if unavailable. */
+    private Integer commit_count;
+    /** Star count (from GitHub API). Null if unavailable. */
+    private Integer stargazers_count;
+    /** Fork count (from GitHub API). Null if unavailable. */
+    private Integer forks_count;
 }
