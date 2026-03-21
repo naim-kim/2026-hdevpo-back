@@ -2,6 +2,8 @@ package com.csee.swplus.mileage.portfolio.entity;
 
 import com.csee.swplus.mileage.base.entity.BaseTime;
 import com.csee.swplus.mileage.portfolio.converter.StringListJsonConverter;
+import com.csee.swplus.mileage.portfolio.converter.TechStackListConverter;
+import com.csee.swplus.mileage.portfolio.dto.TechStackItem;
 import com.csee.swplus.mileage.user.entity.Users;
 import lombok.*;
 
@@ -35,9 +37,9 @@ public class Portfolio extends BaseTime {
     @Column(name = "profile_image_url", length = 255)
     private String profileImageUrl;
 
-    @Convert(converter = StringListJsonConverter.class)
+    @Convert(converter = TechStackListConverter.class)
     @Column(name = "tech_stack", columnDefinition = "TEXT")
-    private List<String> techStack;
+    private List<TechStackItem> techStack;
 
     @Convert(converter = StringListJsonConverter.class)
     @Column(name = "section_order", columnDefinition = "TEXT")

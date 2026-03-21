@@ -85,8 +85,11 @@ public class PortfolioHtmlExportService {
 
         sb.append("[tech_stack]\n");
         if (techStack.getTech_stack() != null) {
-            for (String t : techStack.getTech_stack()) {
-                sb.append("- ").append(t).append("\n");
+            for (TechStackItem t : techStack.getTech_stack()) {
+                String line = t.getName() != null ? t.getName() : "";
+                if (t.getDomain() != null && !t.getDomain().isEmpty()) line += " (" + t.getDomain() + ")";
+                if (t.getLevel() != null) line += " " + t.getLevel() + "%";
+                sb.append("- ").append(line).append("\n");
             }
         }
         sb.append("\n");
@@ -210,8 +213,15 @@ public class PortfolioHtmlExportService {
         // Tech Stack
         if (techStack.getTech_stack() != null && !techStack.getTech_stack().isEmpty()) {
             sb.append("  <section class=\"section\"><h2>Tech Stack</h2><div class=\"tech-tags\">");
-            for (String t : techStack.getTech_stack()) {
-                sb.append("<span class=\"tech-tag\">").append(escape(t)).append("</span>");
+            for (TechStackItem t : techStack.getTech_stack()) {
+                String techName = t.getName() != null ? t.getName() : "";
+                String title = techName;
+                if (t.getDomain() != null && !t.getDomain().isEmpty()) title += " · " + t.getDomain();
+                if (t.getLevel() != null) title += " · " + t.getLevel() + "%";
+                sb.append("<span class=\"tech-tag\" title=\"").append(escape(title)).append("\">")
+                  .append(escape(techName));
+                if (t.getLevel() != null) sb.append(" <small>(").append(t.getLevel()).append("%)</small>");
+                sb.append("</span>");
             }
             sb.append("</div></section>\n");
         }
