@@ -157,20 +157,25 @@ public class PortfolioHtmlExportService {
     }
 
     /** Prefer languages list; fall back to single language. */
-    private java.util.List<String> getRepoLanguagesForDisplay(RepoEntryResponse r) {
+    private java.util.List<RepoLanguageDto> getRepoLanguagesForDisplay(RepoEntryResponse r) {
         if (r.getLanguages() != null && !r.getLanguages().isEmpty()) {
             return r.getLanguages();
         }
         if (r.getLanguage() != null && !r.getLanguage().isEmpty()) {
-            return java.util.Collections.singletonList(r.getLanguage());
+            return java.util.Collections.singletonList(
+                    RepoLanguageDto.builder().name(r.getLanguage()).percentage(null).build());
         }
         return java.util.Collections.emptyList();
     }
 
-    /** Format languages for plain text (e.g. "Java, Python, JavaScript"). */
+    /** Format languages for plain text (e.g. "Java (65.2%), Python (24.1%)" or "Java, Python"). */
     private String formatRepoLanguages(RepoEntryResponse r) {
-        java.util.List<String> langList = getRepoLanguagesForDisplay(r);
-        return String.join(", ", langList);
+        java.util.List<RepoLanguageDto> langList = getRepoLanguagesForDisplay(r);
+        return langList.stream()
+                .map(l -> l.getPercentage() != null
+                        ? l.getName() + " (" + l.getPercentage() + "%)"
+                        : l.getName())
+                .collect(java.util.stream.Collectors.joining(", "));
     }
 
     private String buildHtml(UserInfoResponse userInfo, TechStackResponse techStack,
@@ -234,14 +239,19 @@ public class PortfolioHtmlExportService {
                 String title = r.getCustom_title() != null && !r.getCustom_title().isEmpty() ? r.getCustom_title() : r.getName();
                 if (title == null) title = "Repository";
                 String desc = r.getDescription() != null ? r.getDescription() : "";
-                java.util.List<String> langList = getRepoLanguagesForDisplay(r);
+                java.util.List<RepoLanguageDto> langList = getRepoLanguagesForDisplay(r);
                 String link = r.getHtml_url() != null ? r.getHtml_url() : "#";
                 sb.append("<div class=\"project-card\">");
                 sb.append("<h3><a href=\"").append(escape(link)).append("\" target=\"_blank\" rel=\"noopener\">").append(escape(title)).append("</a></h3>");
                 if (!desc.isEmpty()) sb.append("<p>").append(escape(desc)).append("</p>");
                 sb.append("<div class=\"tech-tags\">");
-                for (String lang : langList) {
-                    if (lang != null && !lang.isEmpty()) sb.append("<span class=\"tech-tag\">").append(escape(lang)).append("</span>");
+                for (RepoLanguageDto lang : langList) {
+                    if (lang != null && lang.getName() != null && !lang.getName().isEmpty()) {
+                        String display = lang.getPercentage() != null
+                                ? lang.getName() + " (" + lang.getPercentage().intValue() + "%)"
+                                : lang.getName();
+                        sb.append("<span class=\"tech-tag\">").append(escape(display)).append("</span>");
+                    }
                 }
                 sb.append("</div></div>");
             }

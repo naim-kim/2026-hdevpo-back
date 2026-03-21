@@ -11,6 +11,7 @@ import com.csee.swplus.mileage.portfolio.dto.MileageLinkRequest;
 import com.csee.swplus.mileage.portfolio.dto.MileageListResponse;
 import com.csee.swplus.mileage.portfolio.dto.RepoEntryRequest;
 import com.csee.swplus.mileage.portfolio.dto.RepoEntryResponse;
+import com.csee.swplus.mileage.portfolio.dto.RepoLanguageDto;
 import com.csee.swplus.mileage.portfolio.dto.RepoPatchRequest;
 import com.csee.swplus.mileage.portfolio.dto.RepositoriesResponse;
 import com.csee.swplus.mileage.portfolio.dto.SettingsResponse;
@@ -83,10 +84,10 @@ public class PortfolioService {
 
     /**
      * Fetches all languages for a repo via GET /repos/{owner}/{repo}/languages.
-     * Returns languages sorted by byte count descending (primary first). Limited to 15.
+     * Returns languages sorted by byte count descending (primary first) with percentage. Limited to 15.
      */
     @SuppressWarnings("unchecked")
-    private List<String> fetchRepoLanguages(String owner, String repoName, String githubToken) {
+    private List<RepoLanguageDto> fetchRepoLanguages(String owner, String repoName, String githubToken) {
         if (owner == null || owner.isEmpty() || repoName == null || repoName.isEmpty()) {
             return Collections.emptyList();
         }
@@ -104,11 +105,25 @@ public class PortfolioService {
             ResponseEntity<Map> res = restTemplate.exchange(url, HttpMethod.GET, req, Map.class);
             Map<String, Object> raw = res.getBody();
             if (raw == null || raw.isEmpty()) return Collections.emptyList();
+
+            long totalBytes = raw.entrySet().stream()
+                    .filter(e -> e.getValue() instanceof Number)
+                    .mapToLong(e -> ((Number) e.getValue()).longValue())
+                    .sum();
+            if (totalBytes == 0) return Collections.emptyList();
+
             return raw.entrySet().stream()
                     .filter(e -> e.getValue() instanceof Number)
                     .sorted(Comparator.<Map.Entry<String, Object>>comparingLong(e -> ((Number) e.getValue()).longValue()).reversed())
                     .limit(15)
-                    .map(Map.Entry::getKey)
+                    .map(e -> {
+                        long bytes = ((Number) e.getValue()).longValue();
+                        double pct = totalBytes > 0 ? 100.0 * bytes / totalBytes : 0;
+                        return RepoLanguageDto.builder()
+                                .name(e.getKey())
+                                .percentage(Math.round(pct * 10) / 10.0)  // 1 decimal place
+                                .build();
+                    })
                     .collect(Collectors.toList());
         } catch (Exception ex) {
             return Collections.emptyList();
@@ -283,9 +298,10 @@ public class PortfolioService {
                             ownerLogin = (String) ((Map<?, ?>) ownerObj).get("login");
                         }
 
-                        List<String> languages = fetchRepoLanguages(ownerLogin, name, githubToken);
+                        List<RepoLanguageDto> languages = fetchRepoLanguages(ownerLogin, name, githubToken);
                         if (languages.isEmpty() && language != null && !language.isEmpty()) {
-                            languages = Collections.singletonList(language);
+                            languages = Collections.singletonList(
+                                    RepoLanguageDto.builder().name(language).percentage(null).build());
                         }
 
                         list.add(RepoEntryResponse.builder()
@@ -405,9 +421,10 @@ public class PortfolioService {
             // ignore GitHub errors here; return DB fields only
         }
 
-        List<String> languages = fetchRepoLanguages(ownerLogin, name, githubToken);
+        List<RepoLanguageDto> languages = fetchRepoLanguages(ownerLogin, name, githubToken);
         if (languages.isEmpty() && language != null && !language.isEmpty()) {
-            languages = Collections.singletonList(language);
+            languages = Collections.singletonList(
+                    RepoLanguageDto.builder().name(language).percentage(null).build());
         }
 
         return RepoEntryResponse.builder()

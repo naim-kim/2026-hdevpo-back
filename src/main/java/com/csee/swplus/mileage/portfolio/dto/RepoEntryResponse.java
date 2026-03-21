@@ -28,8 +28,8 @@ public class RepoEntryResponse {
     private String html_url;
     /** Primary language (from repo list API). Kept for backward compatibility. */
     private String language;
-    /** All languages from GET /repos/{owner}/{repo}/languages, sorted by byte count desc. */
-    private List<String> languages;
+    /** All languages from GET /repos/{owner}/{repo}/languages, sorted by byte count desc, with percentage. */
+    private List<RepoLanguageDto> languages;
     private String created_at;
     private String updated_at;
     /** public or private */
