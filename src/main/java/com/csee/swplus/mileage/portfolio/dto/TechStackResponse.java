@@ -9,6 +9,7 @@ import java.util.List;
 
 /**
  * GET /api/portfolio/tech-stack – 기술 스택 응답.
+ * Each item has name, domain (e.g. Frontend, Backend), and level (0–100).
  */
 @Getter
 @Builder
@@ -16,5 +17,5 @@ import java.util.List;
 @AllArgsConstructor
 public class TechStackResponse {
 
-    private List<String> tech_stack;
+    private List<TechStackItem> tech_stack;
 }

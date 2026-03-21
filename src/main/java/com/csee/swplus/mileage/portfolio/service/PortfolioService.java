@@ -14,6 +14,7 @@ import com.csee.swplus.mileage.portfolio.dto.RepoEntryResponse;
 import com.csee.swplus.mileage.portfolio.dto.RepoPatchRequest;
 import com.csee.swplus.mileage.portfolio.dto.RepositoriesResponse;
 import com.csee.swplus.mileage.portfolio.dto.SettingsResponse;
+import com.csee.swplus.mileage.portfolio.dto.TechStackItem;
 import com.csee.swplus.mileage.portfolio.dto.TechStackResponse;
 import com.csee.swplus.mileage.portfolio.dto.UserInfoResponse;
 import com.csee.swplus.mileage.etcSubitem.repository.EtcSubitemRepository;
@@ -159,7 +160,7 @@ public class PortfolioService {
     /**
      * PUT /api/portfolio/tech-stack – 기술 스택 전체 교체 (batch sync).
      */
-    public TechStackResponse putTechStack(Users user, java.util.List<String> techStack) {
+    public TechStackResponse putTechStack(Users user, java.util.List<TechStackItem> techStack) {
         Portfolio portfolio = getOrCreatePortfolio(user);
         portfolio.setTechStack(techStack != null ? techStack : java.util.Collections.emptyList());
         portfolioRepository.save(portfolio);

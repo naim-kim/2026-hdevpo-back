@@ -9,6 +9,7 @@ import java.util.List;
 
 /**
  * PUT /api/portfolio/tech-stack – 기술 스택 전체 교체 (batch sync).
+ * Each item: name, domain (optional), level (0–100, optional).
  */
 @Getter
 @Setter
@@ -16,5 +17,5 @@ import java.util.List;
 @AllArgsConstructor
 public class TechStackPutRequest {
 
-    private List<String> tech_stack;
+    private List<TechStackItem> tech_stack;
 }
