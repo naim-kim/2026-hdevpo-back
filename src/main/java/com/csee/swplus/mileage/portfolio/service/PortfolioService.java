@@ -533,7 +533,7 @@ public class PortfolioService {
     /**
      * GET /api/portfolio/activities – 활동 목록. Optional filter: ?category=1&category=2 (default: full list).
      */
-    public ActivitiesResponse getActivities(Users user, java.util.List<Integer> categories) {
+    public ActivitiesResponse getActivities(Users user, java.util.List<String> categories) {
         Portfolio portfolio = getOrCreatePortfolio(user);
         java.util.List<PortfolioActivity> list = (categories != null && !categories.isEmpty())
                 ? portfolioActivityRepository.findByPortfolio_IdAndCategoryInOrderByDisplayOrderAscStartDateDesc(portfolio.getId(), categories)

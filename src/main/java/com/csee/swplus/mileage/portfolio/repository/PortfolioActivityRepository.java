@@ -12,7 +12,7 @@ public interface PortfolioActivityRepository extends JpaRepository<PortfolioActi
 
     List<PortfolioActivity> findByPortfolio_IdOrderByDisplayOrderAscStartDateDesc(Long portfolioId);
 
-    List<PortfolioActivity> findByPortfolio_IdAndCategoryInOrderByDisplayOrderAscStartDateDesc(Long portfolioId, List<Integer> categories);
+    List<PortfolioActivity> findByPortfolio_IdAndCategoryInOrderByDisplayOrderAscStartDateDesc(Long portfolioId, List<String> categories);
 
     Optional<PortfolioActivity> findByIdAndPortfolio_Id(Long id, Long portfolioId);
 }
