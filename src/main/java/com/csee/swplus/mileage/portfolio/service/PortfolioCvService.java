@@ -73,8 +73,8 @@ public class PortfolioCvService {
     public CvResponse patch(Users user, Long id, CvPatchRequest request) {
         PortfolioCv cv = cvRepository.findByIdAndUser_Id(id, user.getId())
                 .orElseThrow(() -> new DoNotExistException("해당 이력서를 찾을 수 없습니다."));
-        if (request.getTitle() != null) {
-            cv.setTitle(request.getTitle());
+        if (request.getTitle() != null && !request.getTitle().trim().isEmpty()) {
+            cv.setTitle(request.getTitle().trim());
         }
         if (request.getHtml_content() != null) {
             cv.setHtmlContent(request.getHtml_content());
