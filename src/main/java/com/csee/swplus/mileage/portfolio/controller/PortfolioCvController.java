@@ -26,8 +26,8 @@ public class PortfolioCvController {
     private final PortfolioCvService portfolioCvService;
 
     /**
-     * POST /api/portfolio/cv/build-prompt – Build LLM prompt from job info + selected portfolio items.
-     * Returns prompt text. User copies to LLM, pastes HTML back, then POST /cv.
+     * POST /api/portfolio/cv/build-prompt – Build prompt and create CV (html blank).
+     * Returns prompt + cv_id. User copies prompt to LLM, pastes HTML, then PATCH /cv/{id} with html_content.
      */
     @PostMapping("/build-prompt")
     public ResponseEntity<CvBuildPromptResponse> buildPrompt(@RequestBody CvBuildPromptRequest request) {
