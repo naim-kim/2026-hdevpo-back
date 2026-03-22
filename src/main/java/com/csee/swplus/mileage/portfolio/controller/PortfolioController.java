@@ -15,19 +15,12 @@ import com.csee.swplus.mileage.portfolio.dto.RepoEntryRequest;
 import com.csee.swplus.mileage.portfolio.dto.RepoEntryResponse;
 import com.csee.swplus.mileage.portfolio.dto.RepoPatchRequest;
 import com.csee.swplus.mileage.portfolio.dto.RepositoriesResponse;
-import com.csee.swplus.mileage.portfolio.dto.CvBuildPromptRequest;
-import com.csee.swplus.mileage.portfolio.dto.CvBuildPromptResponse;
-import com.csee.swplus.mileage.portfolio.dto.CvCreateRequest;
-import com.csee.swplus.mileage.portfolio.dto.CvListResponse;
-import com.csee.swplus.mileage.portfolio.dto.CvPatchRequest;
-import com.csee.swplus.mileage.portfolio.dto.CvResponse;
 import com.csee.swplus.mileage.portfolio.dto.SettingsPutRequest;
 import com.csee.swplus.mileage.portfolio.dto.SettingsResponse;
 import com.csee.swplus.mileage.portfolio.dto.TechStackPutRequest;
 import com.csee.swplus.mileage.portfolio.dto.TechStackResponse;
 import com.csee.swplus.mileage.portfolio.dto.UserInfoPatchRequest;
 import com.csee.swplus.mileage.portfolio.dto.UserInfoResponse;
-import com.csee.swplus.mileage.portfolio.service.PortfolioCvService;
 import com.csee.swplus.mileage.portfolio.service.PortfolioHtmlExportService;
 import com.csee.swplus.mileage.portfolio.service.PortfolioService;
 import com.csee.swplus.mileage.user.entity.Users;
@@ -40,6 +33,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -53,19 +47,19 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Portfolio "내 정보 모아보기" API.
+ * Portfolio "내 정보 모아보기" API (repos, activities, mileage, settings, export).
  * Base path: /api/portfolio
  */
 @RestController
 @RequestMapping("/api/portfolio")
 @RequiredArgsConstructor
 @Slf4j
+@Tag(name = "Portfolio", description = "내 정보 모아보기 (레포, 활동, 마일리지, 설정, HTML/Prompt 내보내기)")
 public class PortfolioController {
 
     private final AuthService authService;
     private final PortfolioService portfolioService;
     private final PortfolioHtmlExportService htmlExportService;
-    private final PortfolioCvService portfolioCvService;
 
     @Value("${file.portfolio-profile-upload-dir:${file.profile-upload-dir:./uploads/profile}}")
     private String profileUploadDir;
@@ -388,66 +382,6 @@ public class PortfolioController {
     public ResponseEntity<SettingsResponse> putSettings(@RequestBody SettingsPutRequest request) {
         Users user = getCurrentUser();
         return ResponseEntity.ok(portfolioService.putSettings(user, request != null ? request.getSection_order() : null));
-    }
-
-    // ---- CV (이력서) ----
-
-    /**
-     * POST /api/portfolio/cv/build-prompt – Build LLM prompt from job info + selected portfolio items.
-     * Returns prompt text. User copies to LLM, pastes HTML back, then POST /cv.
-     */
-    @PostMapping("/cv/build-prompt")
-    public ResponseEntity<CvBuildPromptResponse> buildCvPrompt(@RequestBody CvBuildPromptRequest request) {
-        Users user = getCurrentUser();
-        return ResponseEntity.ok(portfolioCvService.buildPrompt(user, request != null ? request : new CvBuildPromptRequest()));
-    }
-
-    /**
-     * POST /api/portfolio/cv – Create CV after user pastes LLM-generated HTML.
-     * Body: { title, job_posting, target_position, additional_notes, prompt, html_content }
-     */
-    @PostMapping("/cv")
-    public ResponseEntity<CvResponse> createCv(@Valid @RequestBody CvCreateRequest request) {
-        Users user = getCurrentUser();
-        return ResponseEntity.ok(portfolioCvService.create(user, request));
-    }
-
-    /**
-     * GET /api/portfolio/cv – List all CVs for the user.
-     */
-    @GetMapping("/cv")
-    public ResponseEntity<CvListResponse> listCvs() {
-        Users user = getCurrentUser();
-        return ResponseEntity.ok(portfolioCvService.list(user));
-    }
-
-    /**
-     * GET /api/portfolio/cv/{id} – Get single CV.
-     */
-    @GetMapping("/cv/{id}")
-    public ResponseEntity<CvResponse> getCv(@PathVariable Long id) {
-        Users user = getCurrentUser();
-        return ResponseEntity.ok(portfolioCvService.get(user, id));
-    }
-
-    /**
-     * PATCH /api/portfolio/cv/{id} – Update title and/or html_content only.
-     * Body: { title, html_content } (optional fields)
-     */
-    @PatchMapping("/cv/{id}")
-    public ResponseEntity<CvResponse> patchCv(@PathVariable Long id, @RequestBody CvPatchRequest request) {
-        Users user = getCurrentUser();
-        return ResponseEntity.ok(portfolioCvService.patch(user, id, request != null ? request : new CvPatchRequest()));
-    }
-
-    /**
-     * DELETE /api/portfolio/cv/{id} – Delete CV.
-     */
-    @DeleteMapping("/cv/{id}")
-    public ResponseEntity<Void> deleteCv(@PathVariable Long id) {
-        Users user = getCurrentUser();
-        portfolioCvService.delete(user, id);
-        return ResponseEntity.noContent().build();
     }
 
     private Users getCurrentUser() {
