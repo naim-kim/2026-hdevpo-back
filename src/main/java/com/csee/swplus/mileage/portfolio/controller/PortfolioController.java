@@ -33,6 +33,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -46,13 +47,14 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Portfolio "내 정보 모아보기" API.
+ * Portfolio "내 정보 모아보기" API (repos, activities, mileage, settings, export).
  * Base path: /api/portfolio
  */
 @RestController
 @RequestMapping("/api/portfolio")
 @RequiredArgsConstructor
 @Slf4j
+@Tag(name = "Portfolio", description = "내 정보 모아보기 (레포, 활동, 마일리지, 설정, HTML/Prompt 내보내기)")
 public class PortfolioController {
 
     private final AuthService authService;
