@@ -27,6 +27,9 @@ public class CvBuildPromptRequest {
     /** 추가 요청사항 */
     private String additional_notes;
 
+    /** Optional title for the CV. Defaults to "새 이력서" if empty. */
+    private String title;
+
     /** Selected mileage entry IDs (portfolio_mileage link id). */
     private List<Long> selected_mileage_ids = Collections.emptyList();
 
