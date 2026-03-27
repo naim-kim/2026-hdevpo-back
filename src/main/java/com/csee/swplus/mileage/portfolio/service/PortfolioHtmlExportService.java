@@ -146,8 +146,6 @@ public class PortfolioHtmlExportService {
         return PROMPT_HEAD + inputData + PROMPT_TAIL;
     }
 
-<<<<<<< Updated upstream
-=======
     /**
      * Builds CV-specific LLM prompt with job info and selected portfolio items only.
      * Bio and tech stack are always included. Repos, mileage, activities are filtered by selected IDs.
@@ -246,7 +244,6 @@ public class PortfolioHtmlExportService {
         return PROMPT_HEAD + sb.toString() + PROMPT_TAIL;
     }
 
->>>>>>> Stashed changes
     private String nullToEmpty(Object o) {
         return o == null ? "" : String.valueOf(o);
     }
