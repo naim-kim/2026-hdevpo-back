@@ -14,14 +14,19 @@ import com.csee.swplus.mileage.portfolio.dto.SettingsPutRequest;
 import com.csee.swplus.mileage.portfolio.dto.SettingsResponse;
 import com.csee.swplus.mileage.portfolio.dto.TechStackPutRequest;
 import com.csee.swplus.mileage.portfolio.dto.TechStackResponse;
+import com.csee.swplus.mileage.portfolio.dto.ProfileLinkDto;
 import com.csee.swplus.mileage.portfolio.dto.UserInfoPatchRequest;
 import com.csee.swplus.mileage.portfolio.dto.UserInfoResponse;
 import com.csee.swplus.mileage.portfolio.service.PortfolioHtmlExportService;
 import com.csee.swplus.mileage.portfolio.service.PortfolioService;
 import com.csee.swplus.mileage.user.entity.Users;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
 import org.springframework.http.HttpHeaders;
@@ -32,6 +37,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
 
 import javax.validation.Valid;
 import java.io.IOException;
@@ -39,6 +45,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
@@ -58,6 +65,7 @@ public class PortfolioController {
     private final AuthService authService;
     private final PortfolioService portfolioService;
     private final PortfolioHtmlExportService htmlExportService;
+    private final ObjectMapper objectMapper;
 
     @Value("${file.portfolio-profile-upload-dir:${file.profile-upload-dir:./uploads/profile}}")
     private String profileUploadDir;
@@ -74,14 +82,16 @@ public class PortfolioController {
     }
 
     /**
-     * PATCH /api/portfolio/user-info – 소개글(bio) 및 프로필 이미지 수정 (multipart/form-data).
-     * Body: bio (text, optional), profile_image (file, optional)
+     * PATCH /api/portfolio/user-info – 소개글(bio), 프로필 이미지, 선택적 링크 목록 (multipart/form-data).
+     * Parts/fields: bio (text), profile_image (file), profile_links (text, optional JSON array string, same shape as JSON PATCH).
+     * {@code profile_links} omitted = 링크 유지; {@code []} 또는 빈 문자열 = 전체 삭제.
      */
     @PatchMapping(value = "/user-info", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @Operation(summary = "프로필 수정 (multipart)", description = "bio, profile_image 파일")
+    @Operation(summary = "프로필 수정 (multipart)", description = "bio, profile_image, profile_links (JSON 문자열)")
     public ResponseEntity<UserInfoResponse> patchUserInfoMultipart(
             @RequestParam(value = "bio", required = false) String bio,
-            @RequestPart(value = "profile_image", required = false) MultipartFile profileImage) {
+            @RequestPart(value = "profile_image", required = false) MultipartFile profileImage,
+            @RequestParam(value = "profile_links", required = false) String profileLinksJson) {
         Users user = getCurrentUser();
         String profileImageUrl = null;
         
@@ -128,8 +138,29 @@ public class PortfolioController {
             }
         }
         
-        UserInfoResponse body = portfolioService.updateBio(user, bio, profileImageUrl, null);
+        List<ProfileLinkDto> profileLinks = parseProfileLinksMultipartParam(profileLinksJson);
+
+        UserInfoResponse body = portfolioService.updateBio(user, bio, profileImageUrl, profileLinks);
         return ResponseEntity.ok(body);
+    }
+
+    /**
+     * {@code null} = 필드 없음(링크 유지); 빈 문자열 또는 {@code []} = 삭제; 그 외 JSON 배열 파싱.
+     */
+    private List<ProfileLinkDto> parseProfileLinksMultipartParam(String profileLinksJson) {
+        if (profileLinksJson == null) {
+            return null;
+        }
+        String t = profileLinksJson.trim();
+        if (t.isEmpty() || "[]".equals(t)) {
+            return Collections.emptyList();
+        }
+        try {
+            return objectMapper.readValue(t, new TypeReference<List<ProfileLinkDto>>() {});
+        } catch (JsonProcessingException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "profile_links must be a JSON array of {label, url}: " + e.getMessage());
+        }
     }
 
     /**
