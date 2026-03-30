@@ -21,6 +21,7 @@ import com.csee.swplus.mileage.portfolio.dto.TechStackEntryPutDto;
 import com.csee.swplus.mileage.portfolio.dto.TechStackEntryResponse;
 import com.csee.swplus.mileage.portfolio.dto.TechStackPutRequest;
 import com.csee.swplus.mileage.portfolio.dto.TechStackResponse;
+import com.csee.swplus.mileage.portfolio.dto.ProfileLinkDto;
 import com.csee.swplus.mileage.portfolio.dto.UserInfoResponse;
 import com.csee.swplus.mileage.etcSubitem.repository.EtcSubitemRepository;
 import com.csee.swplus.mileage.portfolio.entity.Portfolio;
@@ -192,13 +193,19 @@ public class PortfolioService {
                 .semester(user.getSemester())
                 .bio(portfolio.getBio())
                 .profile_image_url(portfolio.getProfileImageUrl())
+                .profile_links(portfolio.getProfileLinks() != null
+                        ? new ArrayList<>(portfolio.getProfileLinks())
+                        : new ArrayList<>())
                 .build();
     }
 
     /**
-     * PATCH /api/portfolio/user-info – 소개글(bio) 및 프로필 이미지 수정.
+     * PATCH /api/portfolio/user-info (JSON) 및 PUT /api/portfolio/user-info/image (파일)에서 사용.
+     * bio, profile_image_url(파일명), profile_links 갱신.
+     *
+     * @param profileLinks {@code null} = do not change links; otherwise replace with normalized list (empty = clear).
      */
-    public UserInfoResponse updateBio(Users user, String bio, String profileImageUrl) {
+    public UserInfoResponse updateBio(Users user, String bio, String profileImageUrl, List<ProfileLinkDto> profileLinks) {
         Portfolio portfolio = getOrCreatePortfolio(user);
         if (bio != null) {
             portfolio.setBio(bio);
@@ -206,8 +213,45 @@ public class PortfolioService {
         if (profileImageUrl != null) {
             portfolio.setProfileImageUrl(profileImageUrl);
         }
+        if (profileLinks != null) {
+            portfolio.setProfileLinks(normalizeProfileLinks(profileLinks));
+        }
         portfolioRepository.save(portfolio);
         return getUserInfo(user);
+    }
+
+    private static final int MAX_PROFILE_LINKS = 10;
+    private static final int MAX_PROFILE_LINK_LABEL = 255;
+    private static final int MAX_PROFILE_LINK_URL = 2048;
+
+    private static List<ProfileLinkDto> normalizeProfileLinks(List<ProfileLinkDto> in) {
+        List<ProfileLinkDto> out = new ArrayList<>();
+        if (in == null) {
+            return out;
+        }
+        for (ProfileLinkDto p : in) {
+            if (p == null) {
+                continue;
+            }
+            String url = p.getUrl() != null ? p.getUrl().trim() : "";
+            if (url.isEmpty()) {
+                continue;
+            }
+            if (url.length() > MAX_PROFILE_LINK_URL) {
+                continue;
+            }
+            String label = p.getLabel() != null ? p.getLabel().trim() : "";
+            if (label.isEmpty()) {
+                label = url;
+            } else if (label.length() > MAX_PROFILE_LINK_LABEL) {
+                label = label.substring(0, MAX_PROFILE_LINK_LABEL);
+            }
+            out.add(ProfileLinkDto.builder().label(label).url(url).build());
+            if (out.size() >= MAX_PROFILE_LINKS) {
+                break;
+            }
+        }
+        return out;
     }
 
     /**
