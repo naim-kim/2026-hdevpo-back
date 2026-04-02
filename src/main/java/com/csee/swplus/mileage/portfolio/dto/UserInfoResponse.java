@@ -23,7 +23,10 @@ public class UserInfoResponse {
     private Integer grade;
     private Integer semester;
     private String bio;
-    private String profile_image_url;
+    /** Local upload filename (same as GET /user-info/image/{filename}). */
+    private String profile_image_upload_key;
+    /** HTTPS image URL for exports; mutually exclusive with upload key in stored state. */
+    private String profile_image_external_url;
 
     /** Optional labeled URLs (e.g. blog, portfolio site). */
     private List<ProfileLinkDto> profile_links;
