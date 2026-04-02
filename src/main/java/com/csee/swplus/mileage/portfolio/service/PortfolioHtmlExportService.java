@@ -335,7 +335,7 @@ public class PortfolioHtmlExportService {
         String summaryChip = roleLine;
 
         String metaLine = buildMetaLine(userInfo);
-        String profileImgSrc = buildProfileImageSrc(userInfo.getProfile_image_url());
+        String profileImgSrc = buildProfileImageSrc(userInfo);
 
         String title = name;
         if (roleLine != null && !roleLine.trim().isEmpty()) {
@@ -767,7 +767,16 @@ public class PortfolioHtmlExportService {
         return s.toString().trim();
     }
 
-    private String buildProfileImageSrc(String filename) {
+    /** Prefer external HTTPS URL; otherwise inline base64 or API URL from upload key. */
+    private String buildProfileImageSrc(UserInfoResponse userInfo) {
+        String external = userInfo.getProfile_image_external_url();
+        if (external != null && !external.trim().isEmpty()) {
+            return external.trim();
+        }
+        return buildProfileImageSrcFromUploadKey(userInfo.getProfile_image_upload_key());
+    }
+
+    private String buildProfileImageSrcFromUploadKey(String filename) {
         if (filename == null || filename.isEmpty()) {
             return null;
         }
