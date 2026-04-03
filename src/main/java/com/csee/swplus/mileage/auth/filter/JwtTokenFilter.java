@@ -193,7 +193,13 @@ public class JwtTokenFilter extends OncePerRequestFilter {
                 lowerURI.contains("/api/mileage/auth/logout") ||
                 lowerURI.contains("/api/mileage/github/callback");
 
-        if (isSwaggerPath || isAuthEndpoint) {
+        // Public portfolio profile image (HTML export / <img> without login; mirrors mileage profile image)
+        boolean isPublicPortfolioProfileImage = lowerURI.contains("/api/portfolio/user-info/image/");
+
+        // Public portfolio by studentId (mirrors /api/mileage/share/**)
+        boolean isPublicPortfolioShare = lowerURI.contains("/api/portfolio/share/");
+
+        if (isSwaggerPath || isAuthEndpoint || isPublicPortfolioProfileImage || isPublicPortfolioShare) {
             log.debug("✅ Path matches excluded path (fallback check)");
             return true;
         }
