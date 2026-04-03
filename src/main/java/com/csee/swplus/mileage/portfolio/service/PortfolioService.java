@@ -92,6 +92,13 @@ public class PortfolioService {
     private String profileUploadDir;
 
     /**
+     * When true, {@code profile_image_external_url} may use {@code http://} (e.g. HTTP-only server).
+     * Default false: HTTPS only (recommended for production behind TLS).
+     */
+    @Value("${portfolio.profile-external-image-allow-http:false}")
+    private boolean profileExternalImageAllowHttp;
+
+    /**
      * Returns the portfolio for the user, creating one if it does not exist.
      */
     public Portfolio getOrCreatePortfolio(Users user) {
@@ -289,8 +296,12 @@ public class PortfolioService {
         if (t.length() > MAX_PROFILE_IMAGE_EXTERNAL_URL_LEN) {
             throw new IllegalArgumentException("profile_image_external_url is too long");
         }
-        if (!t.startsWith("https://")) {
-            throw new IllegalArgumentException("profile_image_external_url must use HTTPS");
+        boolean https = t.startsWith("https://");
+        boolean httpAllowed = profileExternalImageAllowHttp && t.startsWith("http://");
+        if (!https && !httpAllowed) {
+            throw new IllegalArgumentException(profileExternalImageAllowHttp
+                    ? "profile_image_external_url must start with http:// or https://"
+                    : "profile_image_external_url must use HTTPS (or set portfolio.profile-external-image-allow-http=true for HTTP-only environments)");
         }
         URI uri;
         try {
