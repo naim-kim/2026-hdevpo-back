@@ -35,6 +35,7 @@ public class Portfolio extends BaseTime {
     @Column(name = "bio", columnDefinition = "TEXT")
     private String bio;
 
+    /** Local filename under the configured profile upload directory (multipart PUT). */
     @Column(name = "profile_image_url", length = 255)
     private String profileImageUrl;
 

@@ -201,7 +201,6 @@ public class PortfolioService {
 
     /**
      * PATCH /api/portfolio/user-info (JSON) 및 PUT /api/portfolio/user-info/image (파일)에서 사용.
-     * bio, profile_image_url(파일명), profile_links 갱신.
      *
      * @param profileLinks {@code null} = do not change links; otherwise replace with normalized list (empty = clear).
      */

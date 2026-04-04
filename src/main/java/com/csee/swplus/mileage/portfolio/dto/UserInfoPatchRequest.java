@@ -9,7 +9,7 @@ import javax.validation.constraints.Size;
 import java.util.List;
 
 /**
- * PATCH /api/portfolio/user-info (application/json) — bio, profile_image_url, profile_links.
+ * PATCH /api/portfolio/user-info (application/json) — bio, profile_image_url (filename), profile_links.
  * 이미지 파일 업로드는 PUT /api/portfolio/user-info/image.
  */
 @Getter
@@ -21,6 +21,7 @@ public class UserInfoPatchRequest {
     @Size(max = 5000)
     private String bio;
 
+    @Size(max = 255)
     private String profile_image_url;
 
     /**
