@@ -314,8 +314,10 @@ public class PortfolioService {
     }
 
     /**
-     * Full getRepositories with sort, visibility, affiliation. When token exists, uses GET /user/repos
-     * (private + org repos). Otherwise falls back to public GET /users/{username}/repos.
+     * Full getRepositories with sort, visibility. When GitHub is linked, the list is read only from
+     * {@code _sw_mileage_portfolio_github_repo_cache} (paginated in memory). Run POST …/github-cache/refresh
+     * to populate. {@code affiliation} is ignored (not stored in cache). PATCH a repo to pull fresh GitHub
+     * detail into the cache for that row.
      */
     public RepositoriesResponse getRepositories(Users user, Integer page, Integer perPage,
             Boolean selectedOnly, Boolean visibleOnly, String sort, String visibility, String affiliation) {
@@ -335,99 +337,77 @@ public class PortfolioService {
             byRepoId.put(e.getRepoId(), e);
         }
 
-        // Find GitHub username and optionally decrypted token from Profile
         String githubUsername = null;
-        String githubToken = null;
         Profile profile = profileRepository.findBySnum(user.getUniqueId()).orElse(null);
         if (profile != null) {
             githubUsername = profile.getGithubUsername();
-            if (tokenEncryptionKey != null && !tokenEncryptionKey.isEmpty()
-                    && profile.getGithubAccessToken() != null && !profile.getGithubAccessToken().isEmpty()) {
-                githubToken = TokenEncryptionUtil.decrypt(profile.getGithubAccessToken(), tokenEncryptionKey);
-            }
         }
 
-        // Validate sort, visibility, affiliation for GitHub API
         String sortParam = (sort != null && sort.matches("created|updated|pushed|full_name")) ? sort : "updated";
         String visibilityParam = (visibility != null && visibility.matches("all|public|private")) ? visibility : "all";
-        String affiliationParam = (affiliation != null && !affiliation.isEmpty()) ? affiliation : "owner,collaborator,organization_member";
 
         java.util.List<RepoEntryResponse> list = new java.util.ArrayList<>();
 
         if (githubUsername != null && !githubUsername.isEmpty()) {
-            try {
-                Map[] repos = fetchGithubReposPage(
-                        githubUsername, githubToken, p, limit, sortParam, visibilityParam, affiliationParam);
+            List<PortfolioGithubRepoCache> cached =
+                    portfolioGithubRepoCacheRepository.findByPortfolio_Id(portfolio.getId());
+            List<PortfolioGithubRepoCache> filtered = new ArrayList<>(cached);
+            if ("public".equals(visibilityParam)) {
+                filtered.removeIf(c -> !"public".equals(c.getVisibility()));
+            } else if ("private".equals(visibilityParam)) {
+                filtered.removeIf(c -> !"private".equals(c.getVisibility()));
+            }
+            Comparator<PortfolioGithubRepoCache> cmp;
+            if ("created".equals(sortParam)) {
+                cmp = Comparator.comparing(
+                        PortfolioGithubRepoCache::getGithubCreatedAt,
+                        Comparator.nullsLast(Comparator.reverseOrder()));
+            } else if ("full_name".equals(sortParam)) {
+                cmp = Comparator.comparing(
+                        c -> (c.getOwnerLogin() != null ? c.getOwnerLogin() : "") + "/"
+                                + (c.getName() != null ? c.getName() : ""));
+            } else {
+                // updated, pushed — use stored github_updated_at (nulls last, newest first by ISO-8601 string)
+                cmp = Comparator.comparing(
+                        PortfolioGithubRepoCache::getGithubUpdatedAt,
+                        Comparator.nullsLast(Comparator.reverseOrder()));
+            }
+            filtered.sort(cmp);
+            int from = (p - 1) * limit;
+            int to = Math.min(from + limit, filtered.size());
+            List<PortfolioGithubRepoCache> pageRows =
+                    from >= filtered.size() ? Collections.emptyList() : filtered.subList(from, to);
 
-                if (repos != null) {
-                    for (Map repo : repos) {
-                        if (repo == null) continue;
-
-                        Object idObj = repo.get("id");
-                        if (!(idObj instanceof Number)) continue;
-                        Long repoId = ((Number) idObj).longValue();
-
-                        PortfolioRepoEntry selected = byRepoId.get(repoId);
-
-                        String name = (String) repo.get("name");
-                        String htmlUrl = (String) repo.get("html_url");
-                        String language = (String) repo.get("language");
-                        Object c = repo.get("created_at");
-                        Object u = repo.get("updated_at");
-                        String createdAt = c != null ? c.toString() : null;
-                        String updatedAt = u != null ? u.toString() : null;
-                        Boolean isPrivate = (Boolean) repo.get("private");
-                        String vis = isPrivate != null && isPrivate ? "private" : "public";
-                        Integer stargazersCount = null;
-                        Object sc = repo.get("stargazers_count");
-                        if (sc instanceof Number) stargazersCount = ((Number) sc).intValue();
-                        Integer forksCount = null;
-                        Object fc = repo.get("forks_count");
-                        if (fc instanceof Number) forksCount = ((Number) fc).intValue();
-                        String ownerLogin = null;
-                        Object ownerObj = repo.get("owner");
-                        if (ownerObj instanceof Map) {
-                            ownerLogin = (String) ((Map<?, ?>) ownerObj).get("login");
-                        }
-
-                        List<RepoLanguageDto> languages = fetchRepoLanguages(ownerLogin, name, githubToken);
-                        if (languages.isEmpty() && language != null && !language.isEmpty()) {
-                            languages = Collections.singletonList(
-                                    RepoLanguageDto.builder().name(language).percentage(null).build());
-                        }
-
-                        list.add(RepoEntryResponse.builder()
-                                .id(selected != null ? selected.getId() : null)
-                                .repo_id(repoId)
-                                .custom_title(selected != null ? selected.getCustomTitle() : null)
-                                .description(selected != null ? selected.getDescription() : null)
-                                .is_visible(selected != null ? selected.getIsVisible() : false)
-                                .display_order(selected != null ? selected.getDisplayOrder() : 0)
-                                .name(name)
-                                .html_url(htmlUrl)
-                                .language(language)
-                                .languages(languages)
-                                .created_at(createdAt)
-                                .updated_at(updatedAt)
-                                .visibility(vis)
-                                .owner(ownerLogin)
-                                .stargazers_count(stargazersCount)
-                                .forks_count(forksCount)
-                                .build());
-                    }
+            for (PortfolioGithubRepoCache c : pageRows) {
+                long repoId = c.getRepoId();
+                PortfolioRepoEntry selected = byRepoId.get(repoId);
+                List<RepoLanguageDto> languages;
+                if (c.getLanguages() != null && !c.getLanguages().isEmpty()) {
+                    languages = new ArrayList<>(c.getLanguages());
+                } else if (c.getPrimaryLanguage() != null && !c.getPrimaryLanguage().isEmpty()) {
+                    languages = Collections.singletonList(
+                            RepoLanguageDto.builder().name(c.getPrimaryLanguage()).percentage(null).build());
+                } else {
+                    languages = new ArrayList<>();
                 }
-            } catch (Exception ex) {
-                // If GitHub list call fails, fall back to DB-only selected repos (no GitHub fields).
-                for (PortfolioRepoEntry e : entries) {
-                    list.add(RepoEntryResponse.builder()
-                            .id(e.getId())
-                            .repo_id(e.getRepoId())
-                            .custom_title(e.getCustomTitle())
-                            .description(e.getDescription())
-                            .is_visible(e.getIsVisible())
-                            .display_order(e.getDisplayOrder())
-                            .build());
-                }
+                list.add(RepoEntryResponse.builder()
+                        .id(selected != null ? selected.getId() : null)
+                        .repo_id(repoId)
+                        .custom_title(selected != null ? selected.getCustomTitle() : null)
+                        .description(selected != null ? selected.getDescription() : null)
+                        .is_visible(selected != null ? selected.getIsVisible() : false)
+                        .display_order(selected != null ? selected.getDisplayOrder() : 0)
+                        .name(c.getName())
+                        .html_url(c.getHtmlUrl())
+                        .language(c.getPrimaryLanguage())
+                        .languages(languages)
+                        .created_at(c.getGithubCreatedAt())
+                        .updated_at(c.getGithubUpdatedAt())
+                        .visibility(c.getVisibility())
+                        .owner(c.getOwnerLogin())
+                        .stargazers_count(c.getStargazersCount())
+                        .forks_count(c.getForksCount())
+                        .build());
             }
         } else {
             // No GitHub username connected: just return selected repos as before.
@@ -493,10 +473,11 @@ public class PortfolioService {
     }
 
     /**
-     * Calls GitHub (paginated), then upserts {@link PortfolioGithubRepoCache} rows.
-     * Does not change GET /repositories yet — use this from a scheduled job or POST refresh to fill the cache.
-     *
-     * @return number of repo rows written/updated this run
+     * Cache refresh: GitHub list API only (no per-repo {@code /languages}). Upserts list fields:
+     * name, url, primary language, dates, visibility, owner, stars, forks. Does not clear existing
+     * {@code languages_json} on rows already enriched via PUT/PATCH.
+     * <p>
+     * Full language breakdown is written on {@code PUT/PATCH /portfolio/repositories} for selected repos.
      */
     public GithubRepoCacheSyncResult refreshGithubRepositoriesCache(Users user) {
         Portfolio portfolio = getOrCreatePortfolio(user);
@@ -534,10 +515,10 @@ public class PortfolioService {
                 String name = (String) repo.get("name");
                 String htmlUrl = (String) repo.get("html_url");
                 String language = (String) repo.get("language");
-                Object c = repo.get("created_at");
-                Object u = repo.get("updated_at");
-                String createdAt = c != null ? c.toString() : null;
-                String updatedAt = u != null ? u.toString() : null;
+                Object cr = repo.get("created_at");
+                Object ur = repo.get("updated_at");
+                String createdAt = cr != null ? cr.toString() : null;
+                String updatedAt = ur != null ? ur.toString() : null;
                 Boolean isPrivate = (Boolean) repo.get("private");
                 String vis = isPrivate != null && isPrivate ? "private" : "public";
                 Integer stargazersCount = null;
@@ -555,21 +536,15 @@ public class PortfolioService {
                 if (ownerObj instanceof Map) {
                     ownerLogin = (String) ((Map<?, ?>) ownerObj).get("login");
                 }
-                List<RepoLanguageDto> languages = fetchRepoLanguages(ownerLogin, name, githubToken);
-                if (languages.isEmpty() && language != null && !language.isEmpty()) {
-                    languages = Collections.singletonList(
-                            RepoLanguageDto.builder().name(language).percentage(null).build());
-                }
-                PortfolioGithubRepoCache row = portfolioGithubRepoCacheRepository
-                        .findByPortfolio_IdAndRepoId(portfolio.getId(), repoId)
-                        .orElseGet(() -> PortfolioGithubRepoCache.builder()
-                                .portfolio(portfolio)
-                                .repoId(repoId)
-                                .build());
+                Optional<PortfolioGithubRepoCache> existingOpt =
+                        portfolioGithubRepoCacheRepository.findByPortfolio_IdAndRepoId(portfolio.getId(), repoId);
+                PortfolioGithubRepoCache row = existingOpt.orElseGet(() -> PortfolioGithubRepoCache.builder()
+                        .portfolio(portfolio)
+                        .repoId(repoId)
+                        .build());
                 row.setName(name);
                 row.setHtmlUrl(htmlUrl);
                 row.setPrimaryLanguage(language);
-                row.setLanguages(languages.isEmpty() ? new ArrayList<>() : new ArrayList<>(languages));
                 row.setGithubCreatedAt(createdAt);
                 row.setGithubUpdatedAt(updatedAt);
                 row.setVisibility(vis);
@@ -577,11 +552,108 @@ public class PortfolioService {
                 row.setStargazersCount(stargazersCount);
                 row.setForksCount(forksCount);
                 row.setGithubSyncedAt(now);
+                if (!existingOpt.isPresent()) {
+                    row.setLanguages(new ArrayList<>());
+                }
                 portfolioGithubRepoCacheRepository.save(row);
                 synced++;
             }
         }
         return new GithubRepoCacheSyncResult(synced);
+    }
+
+    private String resolveGithubToken(Users user) {
+        if (tokenEncryptionKey == null || tokenEncryptionKey.isEmpty()) {
+            return null;
+        }
+        Profile profile = profileRepository.findBySnum(user.getUniqueId()).orElse(null);
+        if (profile == null || profile.getGithubAccessToken() == null
+                || profile.getGithubAccessToken().isEmpty()) {
+            return null;
+        }
+        return TokenEncryptionUtil.decrypt(profile.getGithubAccessToken(), tokenEncryptionKey);
+    }
+
+    /**
+     * GET /repositories/{id} + /languages — full cache row for one repo (used when saving to portfolio).
+     */
+    private void enrichGithubRepoCacheForPortfolioRepo(Portfolio portfolio, Users user, long repoId) {
+        String githubToken = resolveGithubToken(user);
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> repo = restTemplate.getForObject(
+                    githubApiBaseUrl + "/repositories/" + repoId, Map.class);
+            if (repo == null) {
+                return;
+            }
+            String name = (String) repo.get("name");
+            String htmlUrl = (String) repo.get("html_url");
+            String language = (String) repo.get("language");
+            Object ownerObj = repo.get("owner");
+            String ownerLogin = null;
+            if (ownerObj instanceof Map) {
+                ownerLogin = (String) ((Map<?, ?>) ownerObj).get("login");
+            }
+            Object c = repo.get("created_at");
+            Object u = repo.get("updated_at");
+            String createdAt = c != null ? c.toString() : null;
+            String updatedAt = u != null ? u.toString() : null;
+            Boolean isPrivate = (Boolean) repo.get("private");
+            String vis = isPrivate != null && isPrivate ? "private" : "public";
+            Integer stargazersCount = null;
+            Object sc = repo.get("stargazers_count");
+            if (sc instanceof Number) {
+                stargazersCount = ((Number) sc).intValue();
+            }
+            Integer forksCount = null;
+            Object fc = repo.get("forks_count");
+            if (fc instanceof Number) {
+                forksCount = ((Number) fc).intValue();
+            }
+            List<RepoLanguageDto> languages = fetchRepoLanguages(ownerLogin, name, githubToken);
+            if (languages.isEmpty() && language != null && !language.isEmpty()) {
+                languages = Collections.singletonList(
+                        RepoLanguageDto.builder().name(language).percentage(null).build());
+            }
+            upsertGithubRepoCacheFull(portfolio, repoId, name, htmlUrl, language, languages,
+                    createdAt, updatedAt, vis, ownerLogin, stargazersCount, forksCount);
+        } catch (Exception ex) {
+            // best-effort cache
+        }
+    }
+
+    private void upsertGithubRepoCacheFull(
+            Portfolio portfolio,
+            long repoId,
+            String name,
+            String htmlUrl,
+            String primaryLanguage,
+            List<RepoLanguageDto> languages,
+            String githubCreatedAt,
+            String githubUpdatedAt,
+            String visibility,
+            String ownerLogin,
+            Integer stargazersCount,
+            Integer forksCount) {
+        LocalDateTime now = LocalDateTime.now();
+        PortfolioGithubRepoCache row = portfolioGithubRepoCacheRepository
+                .findByPortfolio_IdAndRepoId(portfolio.getId(), repoId)
+                .orElseGet(() -> PortfolioGithubRepoCache.builder()
+                        .portfolio(portfolio)
+                        .repoId(repoId)
+                        .build());
+        row.setName(name);
+        row.setHtmlUrl(htmlUrl);
+        row.setPrimaryLanguage(primaryLanguage);
+        row.setLanguages(languages == null || languages.isEmpty() ? new ArrayList<>() : new ArrayList<>(languages));
+        row.setGithubCreatedAt(githubCreatedAt);
+        row.setGithubUpdatedAt(githubUpdatedAt);
+        row.setVisibility(visibility);
+        row.setOwnerLogin(ownerLogin);
+        row.setStargazersCount(stargazersCount);
+        row.setForksCount(forksCount);
+        row.setGithubSyncedAt(now);
+        portfolioGithubRepoCacheRepository.save(row);
     }
 
     /**
@@ -617,20 +689,17 @@ public class PortfolioService {
         String updatedAt = null;
         Integer stargazersCount = null;
         Integer forksCount = null;
+        String visibility = null;
 
-        String githubToken = null;
-        if (tokenEncryptionKey != null && !tokenEncryptionKey.isEmpty()) {
-            Profile profile = profileRepository.findBySnum(user.getUniqueId()).orElse(null);
-            if (profile != null && profile.getGithubAccessToken() != null && !profile.getGithubAccessToken().isEmpty()) {
-                githubToken = TokenEncryptionUtil.decrypt(profile.getGithubAccessToken(), tokenEncryptionKey);
-            }
-        }
+        String githubToken = resolveGithubToken(user);
 
+        Map<String, Object> repo = null;
         try {
             @SuppressWarnings("unchecked")
-            Map<String, Object> repo = restTemplate.getForObject(
+            Map<String, Object> fetched = restTemplate.getForObject(
                     githubApiBaseUrl + "/repositories/" + entry.getRepoId(),
                     Map.class);
+            repo = fetched;
             if (repo != null) {
                 name = (String) repo.get("name");
                 htmlUrl = (String) repo.get("html_url");
@@ -647,6 +716,8 @@ public class PortfolioService {
                 if (sc instanceof Number) stargazersCount = ((Number) sc).intValue();
                 Object fc = repo.get("forks_count");
                 if (fc instanceof Number) forksCount = ((Number) fc).intValue();
+                Boolean isPrivate = (Boolean) repo.get("private");
+                visibility = isPrivate != null && isPrivate ? "private" : "public";
             }
         } catch (Exception ex) {
             // ignore GitHub errors here; return DB fields only
@@ -656,6 +727,11 @@ public class PortfolioService {
         if (languages.isEmpty() && language != null && !language.isEmpty()) {
             languages = Collections.singletonList(
                     RepoLanguageDto.builder().name(language).percentage(null).build());
+        }
+
+        if (repo != null) {
+            upsertGithubRepoCacheFull(portfolio, entry.getRepoId(), name, htmlUrl, language, languages,
+                    createdAt, updatedAt, visibility, ownerLogin, stargazersCount, forksCount);
         }
 
         return RepoEntryResponse.builder()
@@ -696,6 +772,11 @@ public class PortfolioService {
                         .isVisible(visible)
                         .displayOrder(i)
                         .build());
+            }
+            for (RepoEntryRequest r : requests) {
+                if (r != null && r.getRepo_id() != null) {
+                    enrichGithubRepoCacheForPortfolioRepo(portfolio, user, r.getRepo_id());
+                }
             }
         }
         return getRepositories(user);
