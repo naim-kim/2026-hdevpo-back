@@ -67,16 +67,16 @@ public class PortfolioUserInfoController {
     }
 
     /**
-     * PATCH /api/portfolio/user-info — JSON: bio, profile_image_upload_key, profile_image_external_url, profile_links.
+     * PATCH /api/portfolio/user-info — JSON: bio, profile_image_url (filename), profile_links.
      * {@code profile_links}: null = 유지, [] = 전체 삭제. 파일 업로드는 PUT /user-info/image 사용.
      */
     @PatchMapping(value = "/user-info", consumes = MediaType.APPLICATION_JSON_VALUE)
     @Operation(summary = "프로필 메타데이터 수정",
-            description = "bio, profile_image_upload_key (local filename), profile_image_external_url (HTTPS), "
-                    + "profile_links. 이미지 파일 업로드는 PUT /user-info/image (clears external URL)")
+            description = "bio, profile_image_url (로컬 파일명), profile_links. 이미지 파일은 PUT /user-info/image")
     public ResponseEntity<UserInfoResponse> patchUserInfo(@Valid @RequestBody UserInfoPatchRequest request) {
         Users user = getCurrentUser();
-        UserInfoResponse body = portfolioService.patchUserInfo(user, request);
+        UserInfoResponse body = portfolioService.updateBio(user, request.getBio(), request.getProfile_image_url(),
+                request.getProfile_links());
         return ResponseEntity.ok(body);
     }
 
@@ -94,14 +94,14 @@ public class PortfolioUserInfoController {
         String newUploadFilename;
         try {
             Portfolio currentPortfolio = portfolioService.getOrCreatePortfolio(user);
-            String oldUploadKey = currentPortfolio.getProfileImageUploadKey();
-            if (oldUploadKey != null && !oldUploadKey.isEmpty()) {
+            String oldFilename = currentPortfolio.getProfileImageUrl();
+            if (oldFilename != null && !oldFilename.isEmpty()) {
                 try {
-                    Path oldImagePath = Paths.get(profileUploadDir).resolve(oldUploadKey);
+                    Path oldImagePath = Paths.get(profileUploadDir).resolve(oldFilename);
                     Files.deleteIfExists(oldImagePath);
-                    log.info("Deleted old profile image: {}", oldUploadKey);
+                    log.info("Deleted old profile image: {}", oldFilename);
                 } catch (IOException e) {
-                    log.warn("Failed to delete old profile image: {}", oldUploadKey, e);
+                    log.warn("Failed to delete old profile image: {}", oldFilename, e);
                 }
             }
             Path uploadPath = Paths.get(profileUploadDir);
@@ -121,7 +121,7 @@ public class PortfolioUserInfoController {
             log.error("Failed to save profile image", e);
             throw new RuntimeException("프로필 이미지 저장 중 오류가 발생했습니다.");
         }
-        UserInfoResponse body = portfolioService.applyProfileImageUpload(user, newUploadFilename);
+        UserInfoResponse body = portfolioService.updateBio(user, null, newUploadFilename, null);
         return ResponseEntity.ok(body);
     }
 

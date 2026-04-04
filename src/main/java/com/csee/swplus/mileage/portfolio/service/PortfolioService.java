@@ -22,7 +22,6 @@ import com.csee.swplus.mileage.portfolio.dto.TechStackEntryResponse;
 import com.csee.swplus.mileage.portfolio.dto.TechStackPutRequest;
 import com.csee.swplus.mileage.portfolio.dto.TechStackResponse;
 import com.csee.swplus.mileage.portfolio.dto.ProfileLinkDto;
-import com.csee.swplus.mileage.portfolio.dto.UserInfoPatchRequest;
 import com.csee.swplus.mileage.portfolio.dto.UserInfoResponse;
 import com.csee.swplus.mileage.etcSubitem.repository.EtcSubitemRepository;
 import com.csee.swplus.mileage.portfolio.entity.Portfolio;
@@ -55,14 +54,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
-import java.io.IOException;
-import java.net.InetAddress;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.net.UnknownHostException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -87,16 +78,6 @@ public class PortfolioService {
 
     @Value("${github.token-encryption-key:}")
     private String tokenEncryptionKey;
-
-    @Value("${file.portfolio-profile-upload-dir:${file.profile-upload-dir:./uploads/profile}}")
-    private String profileUploadDir;
-
-    /**
-     * When true, {@code profile_image_external_url} may use {@code http://} (e.g. HTTP-only server).
-     * Default false: HTTPS only (recommended for production behind TLS).
-     */
-    @Value("${portfolio.profile-external-image-allow-http:false}")
-    private boolean profileExternalImageAllowHttp;
 
     /**
      * Returns the portfolio for the user, creating one if it does not exist.
@@ -199,7 +180,7 @@ public class PortfolioService {
     }
 
     /**
-     * GET /api/portfolio/user-info – 기본 정보 (학교 정보 + bio + profile image fields).
+     * GET /api/portfolio/user-info – 기본 정보 (학교 정보 + bio + profile_image_url).
      */
     public UserInfoResponse getUserInfo(Users user) {
         Portfolio portfolio = getOrCreatePortfolio(user);
@@ -211,8 +192,7 @@ public class PortfolioService {
                 .grade(user.getGrade())
                 .semester(user.getSemester())
                 .bio(portfolio.getBio())
-                .profile_image_upload_key(portfolio.getProfileImageUploadKey())
-                .profile_image_external_url(portfolio.getProfileImageExternalUrl())
+                .profile_image_url(portfolio.getProfileImageUrl())
                 .profile_links(portfolio.getProfileLinks() != null
                         ? new ArrayList<>(portfolio.getProfileLinks())
                         : new ArrayList<>())
@@ -220,135 +200,23 @@ public class PortfolioService {
     }
 
     /**
-     * PATCH /api/portfolio/user-info (JSON). {@code null} image fields = omit; empty string = clear that field.
+     * PATCH /api/portfolio/user-info (JSON) 및 PUT /api/portfolio/user-info/image (파일)에서 사용.
+     *
+     * @param profileLinks {@code null} = do not change links; otherwise replace with normalized list (empty = clear).
      */
-    public UserInfoResponse patchUserInfo(Users user, UserInfoPatchRequest req) {
+    public UserInfoResponse updateBio(Users user, String bio, String profileImageUrl, List<ProfileLinkDto> profileLinks) {
         Portfolio portfolio = getOrCreatePortfolio(user);
-        if (req.getBio() != null) {
-            portfolio.setBio(req.getBio());
+        if (bio != null) {
+            portfolio.setBio(bio);
         }
-        if (req.getProfile_links() != null) {
-            portfolio.setProfileLinks(normalizeProfileLinks(req.getProfile_links()));
+        if (profileImageUrl != null) {
+            portfolio.setProfileImageUrl(profileImageUrl);
         }
-
-        String extIn = req.getProfile_image_external_url();
-        String ukIn = req.getProfile_image_upload_key();
-        boolean extPresent = extIn != null;
-        boolean ukPresent = ukIn != null;
-
-        if (extPresent && ukPresent) {
-            String extTrim = extIn.trim();
-            String ukTrim = ukIn.trim();
-            if (!extTrim.isEmpty() && !ukTrim.isEmpty()) {
-                throw new IllegalArgumentException(
-                        "profile_image_external_url and profile_image_upload_key cannot both be set");
-            }
+        if (profileLinks != null) {
+            portfolio.setProfileLinks(normalizeProfileLinks(profileLinks));
         }
-
-        if (extPresent) {
-            if (extIn.trim().isEmpty()) {
-                portfolio.setProfileImageExternalUrl(null);
-            } else {
-                validateExternalProfileImageUrl(extIn);
-                deleteLocalProfileImageFileIfPresent(portfolio.getProfileImageUploadKey());
-                portfolio.setProfileImageExternalUrl(extIn.trim());
-                portfolio.setProfileImageUploadKey(null);
-            }
-        }
-        if (ukPresent) {
-            if (ukIn.trim().isEmpty()) {
-                deleteLocalProfileImageFileIfPresent(portfolio.getProfileImageUploadKey());
-                portfolio.setProfileImageUploadKey(null);
-            } else {
-                String newKey = ukIn.trim();
-                validateUploadKey(newKey);
-                String oldKey = portfolio.getProfileImageUploadKey();
-                if (oldKey != null && !oldKey.equals(newKey)) {
-                    deleteLocalProfileImageFileIfPresent(oldKey);
-                }
-                portfolio.setProfileImageUploadKey(newKey);
-                portfolio.setProfileImageExternalUrl(null);
-            }
-        }
-
         portfolioRepository.save(portfolio);
         return getUserInfo(user);
-    }
-
-    /**
-     * PUT /api/portfolio/user-info/image — after file saved, persist upload key and clear external URL (upload wins).
-     */
-    public UserInfoResponse applyProfileImageUpload(Users user, String newUploadFilename) {
-        Portfolio portfolio = getOrCreatePortfolio(user);
-        portfolio.setProfileImageExternalUrl(null);
-        portfolio.setProfileImageUploadKey(newUploadFilename);
-        portfolioRepository.save(portfolio);
-        return getUserInfo(user);
-    }
-
-    private static final int MAX_PROFILE_IMAGE_EXTERNAL_URL_LEN = 2048;
-
-    private void validateExternalProfileImageUrl(String url) {
-        if (url == null) {
-            return;
-        }
-        String t = url.trim();
-        if (t.length() > MAX_PROFILE_IMAGE_EXTERNAL_URL_LEN) {
-            throw new IllegalArgumentException("profile_image_external_url is too long");
-        }
-        boolean https = t.startsWith("https://");
-        boolean httpAllowed = profileExternalImageAllowHttp && t.startsWith("http://");
-        if (!https && !httpAllowed) {
-            throw new IllegalArgumentException(profileExternalImageAllowHttp
-                    ? "profile_image_external_url must start with http:// or https://"
-                    : "profile_image_external_url must use HTTPS (or set portfolio.profile-external-image-allow-http=true for HTTP-only environments)");
-        }
-        URI uri;
-        try {
-            uri = new URI(t);
-        } catch (URISyntaxException e) {
-            throw new IllegalArgumentException("Invalid profile_image_external_url");
-        }
-        String host = uri.getHost();
-        if (host == null || host.isEmpty()) {
-            throw new IllegalArgumentException("profile_image_external_url must include a host");
-        }
-        try {
-            InetAddress[] resolved = InetAddress.getAllByName(host);
-            for (InetAddress a : resolved) {
-                if (a.isLoopbackAddress() || a.isSiteLocalAddress() || a.isLinkLocalAddress()
-                        || a.isAnyLocalAddress()) {
-                    throw new IllegalArgumentException("profile_image_external_url host is not allowed");
-                }
-            }
-        } catch (UnknownHostException e) {
-            throw new IllegalArgumentException("profile_image_external_url host could not be resolved");
-        }
-    }
-
-    private static void validateUploadKey(String key) {
-        if (key.length() > 255) {
-            throw new IllegalArgumentException("profile_image_upload_key is too long");
-        }
-        if (key.contains("..") || key.indexOf('/') >= 0 || key.indexOf('\\') >= 0) {
-            throw new IllegalArgumentException("Invalid profile_image_upload_key");
-        }
-    }
-
-    private void deleteLocalProfileImageFileIfPresent(String filename) {
-        if (filename == null || filename.isEmpty()) {
-            return;
-        }
-        try {
-            Path base = Paths.get(profileUploadDir).toAbsolutePath().normalize();
-            Path p = base.resolve(filename).normalize();
-            if (!p.startsWith(base)) {
-                return;
-            }
-            Files.deleteIfExists(p);
-        } catch (IOException ignored) {
-            /* best-effort */
-        }
     }
 
     private static final int MAX_PROFILE_LINKS = 10;

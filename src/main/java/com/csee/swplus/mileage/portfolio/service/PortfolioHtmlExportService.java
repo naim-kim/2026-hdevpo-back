@@ -773,16 +773,12 @@ public class PortfolioHtmlExportService {
         return s.toString().trim();
     }
 
-    /** Prefer external HTTPS URL; otherwise inline base64 or context-path-relative image URL (no hostname). */
+    /** Inline base64 when file exists; otherwise context-path-relative image URL (no hostname). */
     private String buildProfileImageSrc(UserInfoResponse userInfo) {
-        String external = userInfo.getProfile_image_external_url();
-        if (external != null && !external.trim().isEmpty()) {
-            return external.trim();
-        }
-        return buildProfileImageSrcFromUploadKey(userInfo.getProfile_image_upload_key());
+        return buildProfileImageSrcFromFilename(userInfo.getProfile_image_url());
     }
 
-    private String buildProfileImageSrcFromUploadKey(String filename) {
+    private String buildProfileImageSrcFromFilename(String filename) {
         if (filename == null || filename.isEmpty()) {
             return null;
         }
