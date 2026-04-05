@@ -6,9 +6,11 @@ import com.csee.swplus.mileage.portfolio.entity.PortfolioCv;
 import com.csee.swplus.mileage.portfolio.repository.PortfolioCvRepository;
 import com.csee.swplus.mileage.user.entity.Users;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.security.SecureRandom;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -26,30 +28,46 @@ public class PortfolioCvService {
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
     private static final DateTimeFormatter CV_TITLE_DATE = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     private static final int CV_TITLE_MAX_LEN = 255;
+    private static final int PUBLIC_TOKEN_DIGITS = 10;
+    private static final SecureRandom TOKEN_RANDOM = new SecureRandom();
 
     private final PortfolioCvRepository cvRepository;
     private final PortfolioHtmlExportService htmlExportService;
 
     /**
      * Builds the CV prompt and creates a CV record with empty html.
-     * Returns prompt + cv_id. Frontend uses PATCH /cv/{id} to submit html_content in the next step.
+     * Returns prompt + cv_id. Frontend uses PATCH /cv/{id} to submit html_content
+     * in the next step.
      */
     public CvBuildPromptResponse buildPrompt(Users user, CvBuildPromptRequest request) {
         String prompt = htmlExportService.buildCvPrompt(user, request);
         String title = resolveDefaultCvTitle(request);
-        PortfolioCv cv = PortfolioCv.builder()
-                .user(user)
-                .title(title)
-                .jobPosting(request.getJob_posting())
-                .targetPosition(request.getTarget_position())
-                .additionalNotes(request.getAdditional_notes())
-                .prompt(prompt)
-                .htmlContent("")
-                .build();
-        cv = cvRepository.save(cv);
+        PortfolioCv cv = null;
+        for (int attempt = 0; attempt < 32; attempt++) {
+            try {
+                cv = PortfolioCv.builder()
+                        .user(user)
+                        .title(title)
+                        .jobPosting(request.getJob_posting())
+                        .targetPosition(request.getTarget_position())
+                        .additionalNotes(request.getAdditional_notes())
+                        .prompt(prompt)
+                        .htmlContent("")
+                        .publicToken(generateNumericPublicToken())
+                        .isPublic(false)
+                        .build();
+                cv = cvRepository.save(cv);
+                break;
+            } catch (DataIntegrityViolationException e) {
+                if (attempt == 31) {
+                    throw e;
+                }
+            }
+        }
         return CvBuildPromptResponse.builder()
                 .prompt(prompt)
                 .cv_id(cv.getId())
+                .public_token(cv.getPublicToken())
                 .build();
     }
 
@@ -58,6 +76,9 @@ public class PortfolioCvService {
      */
     public CvListResponse list(Users user) {
         List<PortfolioCv> list = cvRepository.findByUser_IdOrderByRegdateDesc(user.getId());
+        for (PortfolioCv cv : list) {
+            ensurePublicToken(cv);
+        }
         List<CvListItem> items = list.stream()
                 .map(this::toListItem)
                 .collect(Collectors.toList());
@@ -65,8 +86,10 @@ public class PortfolioCvService {
     }
 
     /**
-     * Uses explicit {@code title} when non-blank; otherwise "{@code target_position} · yyyy-MM-dd"
-     * (Asia/Seoul), or "새 이력서 · yyyy-MM-dd" when 지원 직무도 비어 있음. Truncates to DB column length.
+     * Uses explicit {@code title} when non-blank; otherwise
+     * "{@code target_position} · yyyy-MM-dd"
+     * (Asia/Seoul), or "새 이력서 · yyyy-MM-dd" when 지원 직무도 비어 있음. Truncates to DB
+     * column length.
      */
     private static String resolveDefaultCvTitle(CvBuildPromptRequest request) {
         if (request.getTitle() != null && !request.getTitle().trim().isEmpty()) {
@@ -91,6 +114,7 @@ public class PortfolioCvService {
     public CvResponse get(Users user, Long id) {
         PortfolioCv cv = cvRepository.findByIdAndUser_Id(id, user.getId())
                 .orElseThrow(() -> new DoNotExistException("해당 이력서를 찾을 수 없습니다."));
+        ensurePublicToken(cv);
         return toResponse(cv);
     }
 
@@ -100,11 +124,15 @@ public class PortfolioCvService {
     public CvResponse patch(Users user, Long id, CvPatchRequest request) {
         PortfolioCv cv = cvRepository.findByIdAndUser_Id(id, user.getId())
                 .orElseThrow(() -> new DoNotExistException("해당 이력서를 찾을 수 없습니다."));
+        ensurePublicToken(cv);
         if (request.getTitle() != null && !request.getTitle().trim().isEmpty()) {
             cv.setTitle(request.getTitle().trim());
         }
         if (request.getHtml_content() != null) {
             cv.setHtmlContent(request.getHtml_content());
+        }
+        if (request.getIs_public() != null) {
+            cv.setPublic(Boolean.TRUE.equals(request.getIs_public()));
         }
         cvRepository.save(cv);
         return toResponse(cv);
@@ -119,6 +147,58 @@ public class PortfolioCvService {
         cvRepository.delete(cv);
     }
 
+    /**
+     * Resolves public CV HTML by token. After lookup: {@code is_public == false} → {@link CvPublicHtmlResult.Kind#PRIVATE};
+     * {@code is_public == true} and blank {@code html_content} → {@link CvPublicHtmlResult.Kind#PUBLIC_EMPTY} (204);
+     * {@code is_public == true} with content → {@link CvPublicHtmlResult.Kind#OK}. Invalid/unknown token → NOT_FOUND / INVALID_TOKEN.
+     */
+    @Transactional(readOnly = true)
+    public CvPublicHtmlResult resolvePublicCvHtml(String rawToken) {
+        String token = rawToken == null ? "" : rawToken.trim();
+        if (!token.matches("\\d{8,12}")) {
+            return CvPublicHtmlResult.invalidToken();
+        }
+        return cvRepository.findByPublicToken(token)
+                .map(cv -> {
+                    if (!cv.isPublic()) {
+                        return CvPublicHtmlResult.privateCv();
+                    }
+                    String html = cv.getHtmlContent();
+                    if (html == null || html.trim().isEmpty()) {
+                        return CvPublicHtmlResult.publicEmpty();
+                    }
+                    return CvPublicHtmlResult.ok(html);
+                })
+                .orElse(CvPublicHtmlResult.notFound());
+    }
+
+    private void ensurePublicToken(PortfolioCv cv) {
+        if (cv.getPublicToken() != null && !cv.getPublicToken().isEmpty()) {
+            return;
+        }
+        for (int attempt = 0; attempt < 32; attempt++) {
+            try {
+                cv.setPublicToken(generateNumericPublicToken());
+                cvRepository.save(cv);
+                return;
+            } catch (DataIntegrityViolationException e) {
+                if (attempt == 31) {
+                    throw e;
+                }
+            }
+        }
+    }
+
+    /** Ten-digit numeric string, first digit 1–9 (stable length for URLs). */
+    private static String generateNumericPublicToken() {
+        StringBuilder sb = new StringBuilder(PUBLIC_TOKEN_DIGITS);
+        sb.append(1 + TOKEN_RANDOM.nextInt(9));
+        for (int i = 1; i < PUBLIC_TOKEN_DIGITS; i++) {
+            sb.append(TOKEN_RANDOM.nextInt(10));
+        }
+        return sb.toString();
+    }
+
     private CvResponse toResponse(PortfolioCv cv) {
         return CvResponse.builder()
                 .id(cv.getId())
@@ -128,6 +208,8 @@ public class PortfolioCvService {
                 .additional_notes(cv.getAdditionalNotes())
                 .prompt(cv.getPrompt())
                 .html_content(cv.getHtmlContent())
+                .public_token(cv.getPublicToken())
+                .is_public(cv.isPublic())
                 .created_at(cv.getRegdate())
                 .updated_at(cv.getModdate())
                 .build();
@@ -140,6 +222,8 @@ public class PortfolioCvService {
                 .job_posting(cv.getJobPosting())
                 .target_position(cv.getTargetPosition())
                 .additional_notes(cv.getAdditionalNotes())
+                .public_token(cv.getPublicToken())
+                .is_public(cv.isPublic())
                 .created_at(cv.getRegdate())
                 .updated_at(cv.getModdate())
                 .build();

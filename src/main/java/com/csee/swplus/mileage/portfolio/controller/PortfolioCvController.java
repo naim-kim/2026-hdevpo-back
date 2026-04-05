@@ -25,7 +25,7 @@ public class PortfolioCvController {
 
     /**
      * POST /api/portfolio/cv/build-prompt – Build prompt and create CV (html blank).
-     * Returns prompt + cv_id. User copies prompt to LLM, pastes HTML, then PATCH /cv/{id} with html_content.
+     * Returns prompt, cv_id, public_token. User copies prompt to LLM, pastes HTML, then PATCH /cv/{id} with html_content / is_public.
      */
     @PostMapping("/build-prompt")
     public ResponseEntity<CvBuildPromptResponse> buildPrompt(@RequestBody CvBuildPromptRequest request) {
@@ -52,8 +52,8 @@ public class PortfolioCvController {
     }
 
     /**
-     * PATCH /api/portfolio/cv/{id} – Update title and/or html_content only.
-     * Body: { title, html_content } (optional fields)
+     * PATCH /api/portfolio/cv/{id} – Update title, html_content, and/or is_public.
+     * Body: { title, html_content, is_public } (optional fields)
      */
     @PatchMapping("/{id}")
     public ResponseEntity<CvResponse> patch(@PathVariable Long id, @RequestBody CvPatchRequest request) {

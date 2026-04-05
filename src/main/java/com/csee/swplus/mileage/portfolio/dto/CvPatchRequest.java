@@ -20,4 +20,7 @@ public class CvPatchRequest {
 
     /** Editable HTML content. */
     private String html_content;
+
+    /** When set, toggles whether the CV HTML is reachable without login (public URL). */
+    private Boolean is_public;
 }
