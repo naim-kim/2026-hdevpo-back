@@ -23,6 +23,9 @@ public class CvResponse {
     private String additional_notes;
     private String prompt;
     private String html_content;
+    /** Numeric share id; public HTML when is_public is true. */
+    private String public_token;
+    private boolean is_public;
     private LocalDateTime created_at;
     private LocalDateTime updated_at;
 }
