@@ -71,20 +71,6 @@ public class PortfolioRepositoriesController {
     }
 
     /**
-     * PATCH …/github/{repoId} — GitHub repo id로 단일 레포 링크 생성 또는 수정.
-     * (PUT으로도 신규 링크 생성 가능; 이 경로는 단건 편집/추가용)
-     */
-    @PatchMapping("/github/{repoId}")
-    @Operation(summary = "레포 추가·수정 (GitHub repo id)")
-    public ResponseEntity<RepoEntryResponse> patchRepositoryByGithubRepoId(
-            @PathVariable Long repoId,
-            @RequestBody RepoPatchRequest request) {
-        Users user = getCurrentUser();
-        return ResponseEntity.ok(portfolioService.patchRepositoryByGithubRepoId(
-                user, repoId, request != null ? request : new RepoPatchRequest()));
-    }
-
-    /**
      * PATCH …/{id} — portfolio 링크 PK(id)로 수정 + GitHub 보강.
      */
     @PatchMapping("/{id}")

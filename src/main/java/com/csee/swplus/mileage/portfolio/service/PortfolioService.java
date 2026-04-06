@@ -688,26 +688,6 @@ public class PortfolioService {
         return applyRepositoryPatchAndEnrich(portfolio, entry, request != null ? request : new RepoPatchRequest(), user);
     }
 
-    /**
-     * PATCH /api/portfolio/repositories/github/{repoId} – GitHub numeric repo id로 링크 생성 또는 수정.
-     * {@code _sw_mileage_portfolio_repos} 행은 이 메서드(또는 동일 로직)로만 추가하는 것을 권장; PUT은 기존 행만 갱신·삭제.
-     */
-    public RepoEntryResponse patchRepositoryByGithubRepoId(Users user, Long githubRepoId, RepoPatchRequest request) {
-        Portfolio portfolio = getOrCreatePortfolio(user);
-        PortfolioRepoEntry entry = portfolioRepoEntryRepository
-                .findByPortfolio_IdAndRepoId(portfolio.getId(), githubRepoId)
-                .orElseGet(() -> {
-                    int n = portfolioRepoEntryRepository.findByPortfolio_IdOrderByDisplayOrderAsc(portfolio.getId()).size();
-                    return portfolioRepoEntryRepository.save(PortfolioRepoEntry.builder()
-                            .portfolio(portfolio)
-                            .repoId(githubRepoId)
-                            .isVisible(true)
-                            .displayOrder(n)
-                            .build());
-                });
-        return applyRepositoryPatchAndEnrich(portfolio, entry, request != null ? request : new RepoPatchRequest(), user);
-    }
-
     private RepoEntryResponse applyRepositoryPatchAndEnrich(
             Portfolio portfolio, PortfolioRepoEntry entry, RepoPatchRequest request, Users user) {
         if (request.getCustom_title() != null) {
