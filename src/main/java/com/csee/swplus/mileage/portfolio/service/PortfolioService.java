@@ -297,6 +297,20 @@ public class PortfolioService {
     }
 
     /**
+     * GET/PATCH response {@code description}: stored user text on the link when non-blank;
+     * otherwise GitHub description (cache or live fetch). User clears override with PATCH {@code ""}.
+     */
+    private static String effectiveRepoDescription(String storedUserDescription, String githubDescription) {
+        if (storedUserDescription != null && !storedUserDescription.trim().isEmpty()) {
+            return storedUserDescription.trim();
+        }
+        if (githubDescription == null || githubDescription.trim().isEmpty()) {
+            return null;
+        }
+        return githubDescription.trim();
+    }
+
+    /**
      * GET /api/portfolio/repositories – GitHub 레포 목록 + (선택된 레포에 한해) 커스텀 설정 정보.
      * Overload for internal callers (PUT, etc.): no filters.
      */
@@ -394,7 +408,9 @@ public class PortfolioService {
                         .id(selected != null ? selected.getId() : null)
                         .repo_id(repoId)
                         .custom_title(selected != null ? selected.getCustomTitle() : null)
-                        .description(selected != null ? selected.getDescription() : null)
+                        .description(effectiveRepoDescription(
+                                selected != null ? selected.getDescription() : null,
+                                c.getGithubDescription()))
                         .is_visible(selected != null ? selected.getIsVisible() : false)
                         .display_order(selected != null ? selected.getDisplayOrder() : 0)
                         .name(c.getName())
@@ -514,6 +530,7 @@ public class PortfolioService {
                 long repoId = ((Number) idObj).longValue();
                 String name = (String) repo.get("name");
                 String htmlUrl = (String) repo.get("html_url");
+                String githubDescription = (String) repo.get("description");
                 String language = (String) repo.get("language");
                 Object cr = repo.get("created_at");
                 Object ur = repo.get("updated_at");
@@ -544,6 +561,7 @@ public class PortfolioService {
                         .build());
                 row.setName(name);
                 row.setHtmlUrl(htmlUrl);
+                row.setGithubDescription(githubDescription);
                 row.setPrimaryLanguage(language);
                 row.setGithubCreatedAt(createdAt);
                 row.setGithubUpdatedAt(updatedAt);
@@ -588,6 +606,7 @@ public class PortfolioService {
             }
             String name = (String) repo.get("name");
             String htmlUrl = (String) repo.get("html_url");
+            String githubDescription = (String) repo.get("description");
             String language = (String) repo.get("language");
             Object ownerObj = repo.get("owner");
             String ownerLogin = null;
@@ -615,7 +634,7 @@ public class PortfolioService {
                 languages = Collections.singletonList(
                         RepoLanguageDto.builder().name(language).percentage(null).build());
             }
-            upsertGithubRepoCacheFull(portfolio, repoId, name, htmlUrl, language, languages,
+            upsertGithubRepoCacheFull(portfolio, repoId, name, htmlUrl, githubDescription, language, languages,
                     createdAt, updatedAt, vis, ownerLogin, stargazersCount, forksCount);
         } catch (Exception ex) {
             // best-effort cache
@@ -627,6 +646,7 @@ public class PortfolioService {
             long repoId,
             String name,
             String htmlUrl,
+            String githubDescription,
             String primaryLanguage,
             List<RepoLanguageDto> languages,
             String githubCreatedAt,
@@ -644,6 +664,7 @@ public class PortfolioService {
                         .build());
         row.setName(name);
         row.setHtmlUrl(htmlUrl);
+        row.setGithubDescription(githubDescription);
         row.setPrimaryLanguage(primaryLanguage);
         row.setLanguages(languages == null || languages.isEmpty() ? new ArrayList<>() : new ArrayList<>(languages));
         row.setGithubCreatedAt(githubCreatedAt);
@@ -657,14 +678,38 @@ public class PortfolioService {
     }
 
     /**
-     * PATCH /api/portfolio/repositories/{id} – 단일 레포 엔트리 일부 수정 (null이 아닌 필드만 반영).
+     * PATCH /api/portfolio/repositories/{id} – portfolio link row id로 단일 레포 수정.
      */
     public RepoEntryResponse patchRepository(Users user, Long id, RepoPatchRequest request) {
         Portfolio portfolio = getOrCreatePortfolio(user);
         PortfolioRepoEntry entry = portfolioRepoEntryRepository
                 .findByIdAndPortfolio_Id(id, portfolio.getId())
                 .orElseThrow(() -> new DoNotExistException("해당 레포를 찾을 수 없습니다."));
+        return applyRepositoryPatchAndEnrich(portfolio, entry, request != null ? request : new RepoPatchRequest(), user);
+    }
 
+    /**
+     * PATCH /api/portfolio/repositories/github/{repoId} – GitHub numeric repo id로 링크 생성 또는 수정.
+     * {@code _sw_mileage_portfolio_repos} 행은 이 메서드(또는 동일 로직)로만 추가하는 것을 권장; PUT은 기존 행만 갱신·삭제.
+     */
+    public RepoEntryResponse patchRepositoryByGithubRepoId(Users user, Long githubRepoId, RepoPatchRequest request) {
+        Portfolio portfolio = getOrCreatePortfolio(user);
+        PortfolioRepoEntry entry = portfolioRepoEntryRepository
+                .findByPortfolio_IdAndRepoId(portfolio.getId(), githubRepoId)
+                .orElseGet(() -> {
+                    int n = portfolioRepoEntryRepository.findByPortfolio_IdOrderByDisplayOrderAsc(portfolio.getId()).size();
+                    return portfolioRepoEntryRepository.save(PortfolioRepoEntry.builder()
+                            .portfolio(portfolio)
+                            .repoId(githubRepoId)
+                            .isVisible(true)
+                            .displayOrder(n)
+                            .build());
+                });
+        return applyRepositoryPatchAndEnrich(portfolio, entry, request != null ? request : new RepoPatchRequest(), user);
+    }
+
+    private RepoEntryResponse applyRepositoryPatchAndEnrich(
+            Portfolio portfolio, PortfolioRepoEntry entry, RepoPatchRequest request, Users user) {
         if (request.getCustom_title() != null) {
             entry.setCustomTitle(request.getCustom_title());
         }
@@ -677,12 +722,11 @@ public class PortfolioService {
         if (request.getDisplay_order() != null) {
             entry.setDisplayOrder(request.getDisplay_order());
         }
-
         portfolioRepoEntryRepository.save(entry);
 
-        // Enrich with latest GitHub info for this repo (optional, best-effort)
         String name = null;
         String htmlUrl = null;
+        String githubDescription = null;
         String language = null;
         String ownerLogin = null;
         String createdAt = null;
@@ -692,7 +736,6 @@ public class PortfolioService {
         String visibility = null;
 
         String githubToken = resolveGithubToken(user);
-
         Map<String, Object> repo = null;
         try {
             @SuppressWarnings("unchecked")
@@ -703,6 +746,7 @@ public class PortfolioService {
             if (repo != null) {
                 name = (String) repo.get("name");
                 htmlUrl = (String) repo.get("html_url");
+                githubDescription = (String) repo.get("description");
                 language = (String) repo.get("language");
                 Object ownerObj = repo.get("owner");
                 if (ownerObj instanceof Map) {
@@ -713,9 +757,13 @@ public class PortfolioService {
                 createdAt = c != null ? c.toString() : null;
                 updatedAt = u != null ? u.toString() : null;
                 Object sc = repo.get("stargazers_count");
-                if (sc instanceof Number) stargazersCount = ((Number) sc).intValue();
+                if (sc instanceof Number) {
+                    stargazersCount = ((Number) sc).intValue();
+                }
                 Object fc = repo.get("forks_count");
-                if (fc instanceof Number) forksCount = ((Number) fc).intValue();
+                if (fc instanceof Number) {
+                    forksCount = ((Number) fc).intValue();
+                }
                 Boolean isPrivate = (Boolean) repo.get("private");
                 visibility = isPrivate != null && isPrivate ? "private" : "public";
             }
@@ -730,15 +778,23 @@ public class PortfolioService {
         }
 
         if (repo != null) {
-            upsertGithubRepoCacheFull(portfolio, entry.getRepoId(), name, htmlUrl, language, languages,
+            upsertGithubRepoCacheFull(portfolio, entry.getRepoId(), name, htmlUrl, githubDescription, language, languages,
                     createdAt, updatedAt, visibility, ownerLogin, stargazersCount, forksCount);
+        }
+
+        String githubForApi = githubDescription;
+        if (githubForApi == null) {
+            githubForApi = portfolioGithubRepoCacheRepository
+                    .findByPortfolio_IdAndRepoId(portfolio.getId(), entry.getRepoId())
+                    .map(PortfolioGithubRepoCache::getGithubDescription)
+                    .orElse(null);
         }
 
         return RepoEntryResponse.builder()
                 .id(entry.getId())
                 .repo_id(entry.getRepoId())
                 .custom_title(entry.getCustomTitle())
-                .description(entry.getDescription())
+                .description(effectiveRepoDescription(entry.getDescription(), githubForApi))
                 .is_visible(entry.getIsVisible())
                 .display_order(entry.getDisplayOrder())
                 .name(name)
@@ -747,6 +803,7 @@ public class PortfolioService {
                 .languages(languages)
                 .created_at(createdAt)
                 .updated_at(updatedAt)
+                .visibility(visibility)
                 .owner(ownerLogin)
                 .stargazers_count(stargazersCount)
                 .forks_count(forksCount)
@@ -754,27 +811,53 @@ public class PortfolioService {
     }
 
     /**
-     * PUT /api/portfolio/repositories – 전체 목록 교체 (batch sync).
+     * PUT /api/portfolio/repositories – 선택 목록 순서·필드 동기화. 새 레포 행은 생성하지 않음
+     * ({@link #patchRepositoryByGithubRepoId}로 먼저 추가). 요청에 없는 repo_id 링크는 삭제.
      */
     public RepositoriesResponse putRepositories(Users user, java.util.List<RepoEntryRequest> requests) {
         Portfolio portfolio = getOrCreatePortfolio(user);
-        portfolioRepoEntryRepository.deleteByPortfolio_Id(portfolio.getId());
-        portfolioRepoEntryRepository.flush();  // Force DELETE before INSERT to avoid unique constraint violation
+        Set<Long> requestedRepoIds = new HashSet<>();
+        if (requests != null) {
+            for (RepoEntryRequest r : requests) {
+                if (r != null && r.getRepo_id() != null) {
+                    requestedRepoIds.add(r.getRepo_id());
+                }
+            }
+        }
+        List<PortfolioRepoEntry> existing = portfolioRepoEntryRepository.findByPortfolio_IdOrderByDisplayOrderAsc(portfolio.getId());
+        for (PortfolioRepoEntry e : existing) {
+            if (!requestedRepoIds.contains(e.getRepoId())) {
+                portfolioRepoEntryRepository.delete(e);
+            }
+        }
+        portfolioRepoEntryRepository.flush();
         if (requests != null) {
             for (int i = 0; i < requests.size(); i++) {
                 RepoEntryRequest r = requests.get(i);
-                Boolean visible = r.getIs_visible() != null ? r.getIs_visible() : true;
-                portfolioRepoEntryRepository.save(PortfolioRepoEntry.builder()
-                        .portfolio(portfolio)
-                        .repoId(r.getRepo_id())
-                        .customTitle(r.getCustom_title())
-                        .description(r.getDescription())
-                        .isVisible(visible)
-                        .displayOrder(i)
-                        .build());
+                if (r == null || r.getRepo_id() == null) {
+                    continue;
+                }
+                Optional<PortfolioRepoEntry> opt =
+                        portfolioRepoEntryRepository.findByPortfolio_IdAndRepoId(portfolio.getId(), r.getRepo_id());
+                if (!opt.isPresent()) {
+                    continue;
+                }
+                PortfolioRepoEntry e = opt.get();
+                if (r.getCustom_title() != null) {
+                    e.setCustomTitle(r.getCustom_title());
+                }
+                if (r.getDescription() != null) {
+                    e.setDescription(r.getDescription());
+                }
+                if (r.getIs_visible() != null) {
+                    e.setIsVisible(r.getIs_visible());
+                }
+                e.setDisplayOrder(i);
+                portfolioRepoEntryRepository.save(e);
             }
             for (RepoEntryRequest r : requests) {
-                if (r != null && r.getRepo_id() != null) {
+                if (r != null && r.getRepo_id() != null
+                        && portfolioRepoEntryRepository.findByPortfolio_IdAndRepoId(portfolio.getId(), r.getRepo_id()).isPresent()) {
                     enrichGithubRepoCacheForPortfolioRepo(portfolio, user, r.getRepo_id());
                 }
             }

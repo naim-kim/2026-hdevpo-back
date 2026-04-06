@@ -61,17 +61,30 @@ public class PortfolioRepositoriesController {
     }
 
     /**
-     * PUT — 표시할 레포 목록 전체 교체.
+     * PUT — 이미 존재하는 링크만 순서·필드 갱신; 요청에 없는 repo_id는 삭제. 새 행 추가는 PATCH …/github/{repoId}.
      */
     @PutMapping
-    @Operation(summary = "레포 표시 설정 일괄 동기화")
+    @Operation(summary = "레포 표시 설정 일괄 동기화 (기존 링크만)")
     public ResponseEntity<RepositoriesResponse> putRepositories(@Valid @RequestBody List<RepoEntryRequest> request) {
         Users user = getCurrentUser();
         return ResponseEntity.ok(portfolioService.putRepositories(user, request));
     }
 
     /**
-     * PATCH …/{id} — 단일 레포 설정 수정 + GitHub에서 상세·languages 보강 후 캐시 반영.
+     * PATCH …/github/{repoId} — GitHub repo id로 포트폴리오 링크 생성 또는 수정 (여기서만 신규 _sw_mileage_portfolio_repos 행 생성).
+     */
+    @PatchMapping("/github/{repoId}")
+    @Operation(summary = "레포 추가·수정 (GitHub repo id)", description = "신규 선택은 이 경로로 추가 후 PUT으로 순서 정리")
+    public ResponseEntity<RepoEntryResponse> patchRepositoryByGithubRepoId(
+            @PathVariable Long repoId,
+            @RequestBody RepoPatchRequest request) {
+        Users user = getCurrentUser();
+        return ResponseEntity.ok(portfolioService.patchRepositoryByGithubRepoId(
+                user, repoId, request != null ? request : new RepoPatchRequest()));
+    }
+
+    /**
+     * PATCH …/{id} — portfolio 링크 PK(id)로 수정 + GitHub 보강.
      */
     @PatchMapping("/{id}")
     @Operation(summary = "단일 레포 설정 수정")
