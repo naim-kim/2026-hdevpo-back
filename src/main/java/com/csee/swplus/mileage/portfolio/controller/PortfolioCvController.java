@@ -62,13 +62,22 @@ public class PortfolioCvController {
     }
 
     /**
-     * DELETE /api/portfolio/cv/{id} – Delete CV.
+     * DELETE /api/portfolio/cv/{id} – Soft delete CV.
      */
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         Users user = getCurrentUser();
         portfolioCvService.delete(user, id);
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * POST /api/portfolio/cv/{id}/restore – Restore a soft-deleted CV.
+     */
+    @PostMapping("/{id}/restore")
+    public ResponseEntity<CvResponse> restore(@PathVariable Long id) {
+        Users user = getCurrentUser();
+        return ResponseEntity.ok(portfolioCvService.restore(user, id));
     }
 
     private Users getCurrentUser() {

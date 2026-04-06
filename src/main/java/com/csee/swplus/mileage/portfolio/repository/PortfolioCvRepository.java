@@ -10,9 +10,12 @@ import java.util.Optional;
 @Repository
 public interface PortfolioCvRepository extends JpaRepository<PortfolioCv, Long> {
 
-    List<PortfolioCv> findByUser_IdOrderByRegdateDesc(Long userId);
+    List<PortfolioCv> findByUser_IdAndIsDeletedFalseOrderByRegdateDesc(Long userId);
 
+    Optional<PortfolioCv> findByIdAndUser_IdAndIsDeletedFalse(Long id, Long userId);
+
+    /** Includes deleted rows; used for restore flows. */
     Optional<PortfolioCv> findByIdAndUser_Id(Long id, Long userId);
 
-    Optional<PortfolioCv> findByPublicToken(String publicToken);
+    Optional<PortfolioCv> findByPublicTokenAndIsDeletedFalse(String publicToken);
 }

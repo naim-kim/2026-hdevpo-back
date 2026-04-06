@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -75,7 +76,7 @@ public class PortfolioCvService {
      * Lists all CVs for the user, ordered by creation date descending.
      */
     public CvListResponse list(Users user) {
-        List<PortfolioCv> list = cvRepository.findByUser_IdOrderByRegdateDesc(user.getId());
+        List<PortfolioCv> list = cvRepository.findByUser_IdAndIsDeletedFalseOrderByRegdateDesc(user.getId());
         for (PortfolioCv cv : list) {
             ensurePublicToken(cv);
         }
@@ -112,7 +113,7 @@ public class PortfolioCvService {
      * Gets a single CV by ID. User must own the CV.
      */
     public CvResponse get(Users user, Long id) {
-        PortfolioCv cv = cvRepository.findByIdAndUser_Id(id, user.getId())
+        PortfolioCv cv = cvRepository.findByIdAndUser_IdAndIsDeletedFalse(id, user.getId())
                 .orElseThrow(() -> new DoNotExistException("해당 이력서를 찾을 수 없습니다."));
         ensurePublicToken(cv);
         return toResponse(cv);
@@ -122,7 +123,7 @@ public class PortfolioCvService {
      * Updates title and/or html_content only. User must own the CV.
      */
     public CvResponse patch(Users user, Long id, CvPatchRequest request) {
-        PortfolioCv cv = cvRepository.findByIdAndUser_Id(id, user.getId())
+        PortfolioCv cv = cvRepository.findByIdAndUser_IdAndIsDeletedFalse(id, user.getId())
                 .orElseThrow(() -> new DoNotExistException("해당 이력서를 찾을 수 없습니다."));
         ensurePublicToken(cv);
         if (request.getTitle() != null && !request.getTitle().trim().isEmpty()) {
@@ -139,12 +140,27 @@ public class PortfolioCvService {
     }
 
     /**
-     * Deletes a CV. User must own the CV.
+     * Soft-deletes a CV. User must own the CV.
      */
     public void delete(Users user, Long id) {
+        PortfolioCv cv = cvRepository.findByIdAndUser_IdAndIsDeletedFalse(id, user.getId())
+                .orElseThrow(() -> new DoNotExistException("해당 이력서를 찾을 수 없습니다."));
+        cv.setDeleted(true);
+        cv.setDeletedAt(LocalDateTime.now());
+        cvRepository.save(cv);
+    }
+
+    /**
+     * Restores a previously deleted CV. User must own the CV.
+     */
+    public CvResponse restore(Users user, Long id) {
         PortfolioCv cv = cvRepository.findByIdAndUser_Id(id, user.getId())
                 .orElseThrow(() -> new DoNotExistException("해당 이력서를 찾을 수 없습니다."));
-        cvRepository.delete(cv);
+        cv.setDeleted(false);
+        cv.setDeletedAt(null);
+        ensurePublicToken(cv);
+        cvRepository.save(cv);
+        return toResponse(cv);
     }
 
     /**
@@ -158,7 +174,7 @@ public class PortfolioCvService {
         if (!token.matches("\\d{8,12}")) {
             return CvPublicHtmlResult.invalidToken();
         }
-        return cvRepository.findByPublicToken(token)
+        return cvRepository.findByPublicTokenAndIsDeletedFalse(token)
                 .map(cv -> {
                     if (!cv.isPublic()) {
                         return CvPublicHtmlResult.privateCv();

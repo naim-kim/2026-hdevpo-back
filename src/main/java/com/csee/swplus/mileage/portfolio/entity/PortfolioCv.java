@@ -5,6 +5,7 @@ import com.csee.swplus.mileage.user.entity.Users;
 import lombok.*;
 
 import javax.persistence.*;
+import java.time.LocalDateTime;
 
 /**
  * User-created CV/Resume with job info, prompt, and LLM-generated HTML.
@@ -52,4 +53,13 @@ public class PortfolioCv extends BaseTime {
     /** When true, HTML is served at GET /api/portfolio/share/cv/{public_token}/html */
     @Column(name = "is_public", nullable = false)
     private boolean isPublic;
+
+    /** Soft delete flag. Deleted CVs are hidden from default list/get/share. */
+    @Column(name = "is_deleted", nullable = false)
+    @Builder.Default
+    private boolean isDeleted = false;
+
+    /** When soft-deleted, deletion timestamp; null otherwise. */
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
 }
