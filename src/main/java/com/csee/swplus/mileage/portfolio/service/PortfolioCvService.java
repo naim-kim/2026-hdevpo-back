@@ -31,6 +31,8 @@ public class PortfolioCvService {
     private static final int CV_TITLE_MAX_LEN = 255;
     private static final int PUBLIC_TOKEN_DIGITS = 10;
     private static final SecureRandom TOKEN_RANDOM = new SecureRandom();
+    private static final int CV_LIST_JOB_POSTING_MAX = 280;
+    private static final int CV_LIST_NOTES_MAX = 200;
 
     private final PortfolioCvRepository cvRepository;
     private final PortfolioHtmlExportService htmlExportService;
@@ -235,13 +237,27 @@ public class PortfolioCvService {
         return CvListItem.builder()
                 .id(cv.getId())
                 .title(cv.getTitle())
-                .job_posting(cv.getJobPosting())
+                .job_posting(ellipsis(cv.getJobPosting(), CV_LIST_JOB_POSTING_MAX))
                 .target_position(cv.getTargetPosition())
-                .additional_notes(cv.getAdditionalNotes())
+                .additional_notes(ellipsis(cv.getAdditionalNotes(), CV_LIST_NOTES_MAX))
                 .public_token(cv.getPublicToken())
                 .is_public(cv.isPublic())
                 .created_at(cv.getRegdate())
                 .updated_at(cv.getModdate())
                 .build();
+    }
+
+    private static String ellipsis(String s, int maxLen) {
+        if (s == null) {
+            return null;
+        }
+        String t = s.trim();
+        if (t.length() <= maxLen) {
+            return t;
+        }
+        if (maxLen <= 3) {
+            return t.substring(0, Math.max(0, maxLen));
+        }
+        return t.substring(0, maxLen - 3) + "...";
     }
 }
