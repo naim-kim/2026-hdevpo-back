@@ -24,6 +24,8 @@ public class RepoEntryResponse {
      * (from cache / last enrich). PATCH with {@code ""} clears the override and shows GitHub again.
      */
     private String description;
+    /** GitHub repository short description from cache / API (may be null). */
+    private String github_description;
     private Boolean is_visible;
     private Integer display_order;
 

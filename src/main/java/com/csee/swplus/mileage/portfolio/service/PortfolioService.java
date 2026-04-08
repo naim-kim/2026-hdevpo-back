@@ -411,6 +411,7 @@ public class PortfolioService {
                         .description(effectiveRepoDescription(
                                 selected != null ? selected.getDescription() : null,
                                 c.getGithubDescription()))
+                        .github_description(c.getGithubDescription())
                         .is_visible(selected != null ? selected.getIsVisible() : false)
                         .display_order(selected != null ? selected.getDisplayOrder() : 0)
                         .name(c.getName())
@@ -433,6 +434,7 @@ public class PortfolioService {
                         .repo_id(e.getRepoId())
                         .custom_title(e.getCustomTitle())
                         .description(e.getDescription())
+                        .github_description(null)
                         .is_visible(e.getIsVisible())
                         .display_order(e.getDisplayOrder())
                         .build());
@@ -775,6 +777,7 @@ public class PortfolioService {
                 .repo_id(entry.getRepoId())
                 .custom_title(entry.getCustomTitle())
                 .description(effectiveRepoDescription(entry.getDescription(), githubForApi))
+                .github_description(githubForApi)
                 .is_visible(entry.getIsVisible())
                 .display_order(entry.getDisplayOrder())
                 .name(name)
