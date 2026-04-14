@@ -983,7 +983,13 @@ public class PortfolioService {
         Set<Long> requestedRepoIds = new HashSet<>();
         if (requests != null) {
             for (RepoEntryRequest r : requests) {
-                if (r != null && r.getRepo_id() != null) {
+                if (r == null || r.getRepo_id() == null) {
+                    continue;
+                }
+                // Treat PUT payload as "selected repos". If the UI sends the full cache list with toggles,
+                // only repos with is_visible=true should be persisted as portfolio selections.
+                boolean selected = r.getIs_visible() == null || Boolean.TRUE.equals(r.getIs_visible());
+                if (selected) {
                     requestedRepoIds.add(r.getRepo_id());
                 }
             }
@@ -999,6 +1005,11 @@ public class PortfolioService {
             for (int i = 0; i < requests.size(); i++) {
                 RepoEntryRequest r = requests.get(i);
                 if (r == null || r.getRepo_id() == null) {
+                    continue;
+                }
+                boolean selected = r.getIs_visible() == null || Boolean.TRUE.equals(r.getIs_visible());
+                if (!selected) {
+                    // Not selected -> do not create/update a PortfolioRepoEntry row.
                     continue;
                 }
                 Optional<PortfolioRepoEntry> opt =
@@ -1021,8 +1032,14 @@ public class PortfolioService {
                 portfolioRepoEntryRepository.save(e);
             }
             for (RepoEntryRequest r : requests) {
-                if (r != null && r.getRepo_id() != null
-                        && portfolioRepoEntryRepository.findByPortfolio_IdAndRepoId(portfolio.getId(), r.getRepo_id()).isPresent()) {
+                if (r == null || r.getRepo_id() == null) {
+                    continue;
+                }
+                boolean selected = r.getIs_visible() == null || Boolean.TRUE.equals(r.getIs_visible());
+                if (!selected) {
+                    continue;
+                }
+                if (portfolioRepoEntryRepository.findByPortfolio_IdAndRepoId(portfolio.getId(), r.getRepo_id()).isPresent()) {
                     enrichGithubRepoCacheForPortfolioRepo(portfolio, user, r.getRepo_id());
                 }
             }
