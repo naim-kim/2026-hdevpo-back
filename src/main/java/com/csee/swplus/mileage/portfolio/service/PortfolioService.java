@@ -788,7 +788,16 @@ public class PortfolioService {
                     if (seenRepoIds.contains(repoId)) {
                         continue;
                     }
-                    upsertOneCachedRepoFromGithubMap(portfolio, repo, now);
+                    // Commit search repository objects can omit fields like created_at/updated_at/language.
+                    // Hydrate via GET /repositories/{id} when needed so the cache has dates/language.
+                    Map<?, ?> repoForUpsert = repo;
+                    if (repo.get("created_at") == null || repo.get("updated_at") == null || repo.get("language") == null) {
+                        Map<String, Object> detailed = fetchGithubRepoByIdWithToken(repoId, githubToken);
+                        if (detailed != null && !detailed.isEmpty()) {
+                            repoForUpsert = detailed;
+                        }
+                    }
+                    upsertOneCachedRepoFromGithubMap(portfolio, repoForUpsert, now);
                     seenRepoIds.add(repoId);
                     added++;
                 }
@@ -804,6 +813,25 @@ public class PortfolioService {
             warnings.add("CONTRIBUTOR_SEARCH_FAILED: Could not merge contributor repos via commit search: " + msg);
         }
         return added;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> fetchGithubRepoByIdWithToken(long repoId, String githubToken) {
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setBearerAuth(githubToken);
+            headers.setAccept(Collections.singletonList(MediaType.APPLICATION_JSON));
+            HttpEntity<Void> req = new HttpEntity<>(headers);
+            ResponseEntity<Map> res = restTemplate.exchange(
+                    githubApiBaseUrl + "/repositories/" + repoId, HttpMethod.GET, req, Map.class);
+            Object body = res.getBody();
+            if (body instanceof Map) {
+                return (Map<String, Object>) body;
+            }
+        } catch (Exception ignored) {
+            // best-effort hydration only
+        }
+        return null;
     }
 
     /**
