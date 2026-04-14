@@ -16,9 +16,6 @@ import com.csee.swplus.mileage.user.entity.Users;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
-import io.swagger.v3.oas.annotations.media.Content;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -74,6 +71,7 @@ public class PortfolioShareController {
     @Operation(
             summary = "[공개] 레포 목록",
             description = "visible_only is fixed (hidden repos excluded). page and per_page are ignored; the full visible list is returned. "
+                    + "owner: owner_login exact match filter. "
                     + "search: 캐시 레포 메타·커스텀 제목 등 부분 일치(공백 AND). "
                     + "affiliation 쿼리는 지원하지 않음. "
                     + "GitHub API의 affiliation은 목록 API에서의 관계 필터이며 ‘커밋 이력이 있는 모든 레포’와 동일하지 않음.")
@@ -84,10 +82,11 @@ public class PortfolioShareController {
             @RequestParam(value = "selected_only", required = false) Boolean selectedOnly,
             @RequestParam(value = "sort", required = false) String sort,
             @RequestParam(value = "visibility", required = false) String visibility,
+            @RequestParam(value = "owner", required = false) String owner,
             @RequestParam(value = "search", required = false) String search) {
         Users user = resolveUser(studentId);
         return ResponseEntity.ok(
-                portfolioService.getRepositories(user, page, perPage, selectedOnly, true, sort, visibility, search));
+                portfolioService.getRepositories(user, page, perPage, selectedOnly, true, sort, visibility, owner, search));
     }
 
     @GetMapping("/{studentId}/mileage")

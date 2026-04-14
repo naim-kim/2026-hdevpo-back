@@ -1,5 +1,7 @@
 package com.csee.swplus.mileage.github.service;
 
+import com.csee.swplus.mileage.github.dto.GitHubOrgDto;
+import com.csee.swplus.mileage.github.dto.GitHubOrgsResponse;
 import com.csee.swplus.mileage.github.dto.GitHubStatusResponse;
 import com.csee.swplus.mileage.github.util.TokenEncryptionUtil;
 import com.csee.swplus.mileage.portfolio.repository.PortfolioGithubRepoCacheRepository;
@@ -18,6 +20,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 
 @Service
@@ -86,10 +91,14 @@ public class GitHubOAuthService {
                     Map.class
             );
 
-            Map<String, Object> githubUser = userRes.getBody();
-            Long githubId = Long.valueOf(githubUser.get("id").toString());
-            String githubUsername = (String) githubUser.get("login");
-            String githubName = (String) githubUser.get("name");
+            Map githubUser = userRes.getBody();
+            Long githubId = githubUser.get("id") != null ? Long.valueOf(githubUser.get("id").toString()) : null;
+            String githubUsername = githubUser.get("login") != null ? githubUser.get("login").toString() : null;
+            String githubName = githubUser.get("name") != null ? githubUser.get("name").toString() : null;
+            if (githubId == null || githubUsername == null || githubUsername.isEmpty()) {
+                log.error("❌ GitHub user response missing id/login");
+                throw new RuntimeException("Failed to fetch GitHub user identity");
+            }
             
             log.info("   ✅ GitHub user info fetched - ID: {}, Username: {}, Name: {}", 
                     githubId, githubUsername, githubName);
@@ -159,6 +168,86 @@ public class GitHubOAuthService {
                     .githubUsername(null)
                     .build();
         }
+    }
+
+    /**
+     * Lists GitHub organizations for the current user via {@code GET /user/orgs}.
+     * Requires stored OAuth token (encrypted in profile). Returns 200 with warnings if token is unavailable.
+     */
+    @SuppressWarnings({"rawtypes"})
+    public GitHubOrgsResponse listOrganizations() {
+        String currentUserId = SecurityContextHolder.getContext().getAuthentication().getName();
+        List<String> warnings = new ArrayList<>();
+
+        Profile profile = profileRepository.findBySnum(currentUserId).orElse(null);
+        if (profile == null) {
+            warnings.add("NO_PROFILE: Profile not found.");
+            return GitHubOrgsResponse.builder().organizations(Collections.emptyList()).warnings(warnings).build();
+        }
+
+        if (tokenEncryptionKey == null || tokenEncryptionKey.isEmpty()) {
+            warnings.add("GITHUB_TOKEN_KEY_MISSING: github.token-encryption-key is not configured.");
+            return GitHubOrgsResponse.builder().organizations(Collections.emptyList()).warnings(warnings).build();
+        }
+
+        String encrypted = profile.getGithubAccessToken();
+        if (encrypted == null || encrypted.isEmpty()) {
+            warnings.add("NO_GITHUB_TOKEN: No linked GitHub OAuth token.");
+            return GitHubOrgsResponse.builder().organizations(Collections.emptyList()).warnings(warnings).build();
+        }
+
+        String token = TokenEncryptionUtil.decrypt(encrypted, tokenEncryptionKey);
+        if (token == null || token.isEmpty()) {
+            warnings.add("GITHUB_TOKEN_UNAVAILABLE: Token could not be decrypted or is empty.");
+            return GitHubOrgsResponse.builder().organizations(Collections.emptyList()).warnings(warnings).build();
+        }
+
+        List<GitHubOrgDto> orgs = new ArrayList<>();
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setBearerAuth(token);
+            headers.setAccept(Collections.singletonList(MediaType.APPLICATION_JSON));
+            HttpEntity<Void> req = new HttpEntity<>(headers);
+
+            // paginate (per_page max 100)
+            for (int page = 1; page <= 10; page++) {
+                String url = apiBaseUrl + "/user/orgs?per_page=100&page=" + page;
+                ResponseEntity<List> res = restTemplate.exchange(url, HttpMethod.GET, req, List.class);
+                Object body = res.getBody();
+                if (!(body instanceof List)) {
+                    break;
+                }
+                List<?> items = (List<?>) body;
+                if (items.isEmpty()) {
+                    break;
+                }
+                for (Object o : items) {
+                    if (!(o instanceof Map)) {
+                        continue;
+                    }
+                    Map m = (Map) o;
+                    Object idObj = m.get("id");
+                    Long id = (idObj instanceof Number) ? ((Number) idObj).longValue() : null;
+                    String login = (String) m.get("login");
+                    String avatarUrl = (String) m.get("avatar_url");
+                    String htmlUrl = (String) m.get("html_url");
+                    orgs.add(GitHubOrgDto.builder()
+                            .id(id)
+                            .login(login)
+                            .avatarUrl(avatarUrl)
+                            .htmlUrl(htmlUrl)
+                            .build());
+                }
+                if (items.size() < 100) {
+                    break;
+                }
+            }
+        } catch (Exception e) {
+            String msg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+            warnings.add("GITHUB_ORGS_FAILED: Could not fetch organizations: " + msg);
+        }
+
+        return GitHubOrgsResponse.builder().organizations(orgs).warnings(warnings).build();
     }
 
     /**

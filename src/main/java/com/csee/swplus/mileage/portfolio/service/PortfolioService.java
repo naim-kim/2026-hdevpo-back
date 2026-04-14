@@ -317,7 +317,7 @@ public class PortfolioService {
      * Overload for internal callers (PUT, etc.): no filters.
      */
     public RepositoriesResponse getRepositories(Users user) {
-        return getRepositories(user, 1, 100, null, null, null, null, null);
+        return getRepositories(user, 1, 100, null, null, null, null, null, null);
     }
 
     /**
@@ -326,7 +326,7 @@ public class PortfolioService {
      */
     public RepositoriesResponse getRepositories(Users user, Integer page, Integer perPage,
             Boolean selectedOnly, Boolean visibleOnly) {
-        return getRepositories(user, page, perPage, selectedOnly, visibleOnly, null, null, null);
+        return getRepositories(user, page, perPage, selectedOnly, visibleOnly, null, null, null, null);
     }
 
     /**
@@ -341,8 +341,16 @@ public class PortfolioService {
      * by relationship (owner / collaborator / organization member) for that <em>listing</em> API—it does not mean
      * “every repository I have committed to.” PATCH a repo to pull fresh GitHub detail into the cache for that row.
      */
-    public RepositoriesResponse getRepositories(Users user, Integer page, Integer perPage,
-            Boolean selectedOnly, Boolean visibleOnly, String sort, String visibility, String search) {
+    public RepositoriesResponse getRepositories(
+            Users user,
+            Integer page,
+            Integer perPage,
+            Boolean selectedOnly,
+            Boolean visibleOnly,
+            String sort,
+            String visibility,
+            String owner,
+            String search) {
         int p = (page == null || page < 1) ? 1 : page;
         int limit = (perPage == null || perPage < 1) ? 30 : perPage;
         if (limit > 100) {
@@ -365,7 +373,7 @@ public class PortfolioService {
             githubUsername = profile.getGithubUsername();
         }
 
-        String sortParam = (sort != null && sort.matches("created|updated|pushed|full_name")) ? sort : "updated";
+        String sortParam = (sort != null && sort.matches("created|updated|pushed|full_name|owner_login")) ? sort : "updated";
         String visibilityParam = (visibility != null && visibility.matches("all|public|private")) ? visibility : "all";
 
         java.util.List<RepoEntryResponse> list = new java.util.ArrayList<>();
@@ -374,6 +382,11 @@ public class PortfolioService {
             List<PortfolioGithubRepoCache> cached =
                     portfolioGithubRepoCacheRepository.findByPortfolio_Id(portfolio.getId());
             List<PortfolioGithubRepoCache> filtered = new ArrayList<>(cached);
+            if (owner != null && !owner.trim().isEmpty()) {
+                String ownerLogin = owner.trim();
+                filtered.removeIf(
+                        c -> c.getOwnerLogin() == null || !c.getOwnerLogin().equalsIgnoreCase(ownerLogin));
+            }
             if ("public".equals(visibilityParam)) {
                 filtered.removeIf(c -> !"public".equals(c.getVisibility()));
             } else if ("private".equals(visibilityParam)) {
@@ -389,6 +402,14 @@ public class PortfolioService {
                 cmp = Comparator.comparing(
                         PortfolioGithubRepoCache::getGithubCreatedAt,
                         Comparator.nullsLast(Comparator.reverseOrder()));
+            } else if ("owner_login".equals(sortParam)) {
+                cmp = Comparator
+                        .comparing(
+                                (PortfolioGithubRepoCache c) -> c.getOwnerLogin() != null ? c.getOwnerLogin() : "",
+                                String.CASE_INSENSITIVE_ORDER)
+                        .thenComparing(
+                                (PortfolioGithubRepoCache c) -> c.getName() != null ? c.getName() : "",
+                                String.CASE_INSENSITIVE_ORDER);
             } else if ("full_name".equals(sortParam)) {
                 cmp = Comparator.comparing(
                         c -> (c.getOwnerLogin() != null ? c.getOwnerLogin() : "") + "/"
