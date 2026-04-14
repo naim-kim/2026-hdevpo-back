@@ -42,21 +42,17 @@ public class PortfolioRepositoriesController {
                     + "search: 레포 이름·owner·URL·설명·언어·repo_id·커스텀 제목/설명 부분 일치(공백으로 AND). "
                     + "affiliation 쿼리는 지원하지 않음(캐시 행에 저장되지 않음). "
                     + "캐시 갱신 시 GitHub에는 affiliation=owner,collaborator 만 사용(organization_member 제외). "
-                    + "sort: created|updated|pushed|full_name|owner_login. "
                     + "참고: GitHub affiliation 파라미터는 목록 API에서의 관계 필터이며 ‘커밋한 모든 레포’와 같지 않음.")
     public ResponseEntity<RepositoriesResponse> getRepositories(
             @RequestParam(value = "page", required = false) Integer page,
             @RequestParam(value = "per_page", required = false) Integer perPage,
-            @RequestParam(value = "selected_only", required = false) Boolean selectedOnly,
             @RequestParam(value = "visible_only", required = false) Boolean visibleOnly,
-            @RequestParam(value = "sort", required = false) String sort,
-            @RequestParam(value = "visibility", required = false) String visibility,
             @RequestParam(value = "owner", required = false) String owner,
             @RequestParam(value = "search", required = false) String search) {
         Users user = getCurrentUser();
         return ResponseEntity.ok(
                 portfolioService.getRepositories(
-                        user, page, perPage, selectedOnly, visibleOnly, sort, visibility, owner, search));
+                        user, page, perPage, false, visibleOnly, null, null, owner, search));
     }
 
     /**

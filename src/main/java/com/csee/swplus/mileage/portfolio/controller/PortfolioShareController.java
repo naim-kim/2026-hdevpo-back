@@ -79,14 +79,11 @@ public class PortfolioShareController {
             @PathVariable String studentId,
             @RequestParam(value = "page", required = false) Integer page,
             @RequestParam(value = "per_page", required = false) Integer perPage,
-            @RequestParam(value = "selected_only", required = false) Boolean selectedOnly,
-            @RequestParam(value = "sort", required = false) String sort,
-            @RequestParam(value = "visibility", required = false) String visibility,
             @RequestParam(value = "owner", required = false) String owner,
             @RequestParam(value = "search", required = false) String search) {
         Users user = resolveUser(studentId);
         return ResponseEntity.ok(
-                portfolioService.getRepositories(user, page, perPage, selectedOnly, true, sort, visibility, owner, search));
+                portfolioService.getRepositories(user, page, perPage, false, true, null, null, owner, search));
     }
 
     @GetMapping("/{studentId}/mileage")
