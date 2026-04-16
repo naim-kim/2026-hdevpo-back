@@ -38,8 +38,8 @@ out/
 
 ### Application Properties ###
 # Keep base application properties, ignore profile-specific ones
-*.properties
-*.yml
+application.properties
+application.yml
 
 ### Test Data ###
 uploads/*
