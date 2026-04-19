@@ -65,15 +65,8 @@ public class SecurityConfig {
                 http
                                 .requestMatchers()
                                 .antMatchers(
-                                                "/milestone25_1/swagger-ui/**",
-                                                "/milestone25_1/swagger-ui.html",
-                                                "/milestone25_1/v3/api-docs/**",
-
-                                                "/mileage/swagger-ui/**",
-                                                "/mileage/swagger-ui.html",
-                                                "/mileage/v3/api-docs/**",
-
                                                 "/swagger-ui/**",
+                                                "/swagger-ui.html",
                                                 "/v3/api-docs/**")
                                 .and()
                                 .authorizeRequests(auth -> auth.anyRequest().authenticated())
@@ -120,58 +113,21 @@ public class SecurityConfig {
                                                 .frameOptions(frame -> frame.deny()))
                                 .authorizeRequests(auth -> auth
 
-                                                // PUBLIC endpoints
+                                                // PUBLIC endpoints (paths after context-path; works for any deployment context)
                                                 .antMatchers(
                                                                 "/api/mileage/auth/**",
-                                                                "/milestone25_1/api/mileage/auth/**",
-                                                                "/mileage/api/mileage/auth/**",
-
                                                                 "/api/mileage/share/**",
-                                                                "/milestone25/api/mileage/share/**",
-                                                                "/milestone25_1/api/mileage/share/**",
-                                                                "/mileage/api/mileage/share/**",
-
                                                                 "/api/portfolio/share/**",
-                                                                "/milestone25/api/portfolio/share/**",
-                                                                "/milestone25_1/api/portfolio/share/**",
-                                                                "/mileage/api/portfolio/share/**",
-
                                                                 "/api/mileage/contact",
-                                                                "/milestone25_1/api/mileage/contact",
-                                                                "/mileage/api/mileage/contact",
-
                                                                 "/api/mileage/announcement",
-                                                                "/milestone25_1/api/mileage/announcement",
-                                                                "/mileage/api/mileage/announcement",
-
                                                                 "/api/mileage/maintenance",
-                                                                "/milestone25_1/api/mileage/maintenance",
-                                                                "/mileage/api/mileage/maintenance",
-
                                                                 "/api/mileage/profile/image/**",
-                                                                "/milestone25_1/api/mileage/profile/image/**",
-                                                                "/mileage/api/mileage/profile/image/**",
-
                                                                 "/api/mileage/project/image/**",
-                                                                "/milestone25_1/api/mileage/project/image/**",
-                                                                "/mileage/api/mileage/project/image/**",
-
-                                                                // Portfolio: profile image files (same idea as /api/mileage/profile/image/**)
                                                                 "/api/portfolio/user-info/image/**",
-                                                                "/milestone25/api/portfolio/user-info/image/**",
-                                                                "/milestone25_1/api/portfolio/user-info/image/**",
-                                                                "/mileage/api/portfolio/user-info/image/**",
-
-                                                                "/api/mileage/github/callback",
-                                                                "/milestone25_1/api/mileage/github/callback",
-                                                                "/mileage/api/mileage/github/callback")
+                                                                "/api/mileage/github/callback")
                                                 .permitAll()
 
-                                                // PROTECTED endpoints
-                                                .antMatchers(
-                                                                "/api/mileage/**",
-                                                                "/milestone25_1/api/mileage/**",
-                                                                "/mileage/api/mileage/**")
+                                                .antMatchers("/api/mileage/**")
                                                 .authenticated())
                                 .addFilterBefore(new ExceptionHandlerFilter(),
                                                 UsernamePasswordAuthenticationFilter.class)

@@ -2,9 +2,6 @@ package com.csee.swplus.mileage.auth.filter;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.annotation.Order;
-import org.springframework.stereotype.Component;
-
 import javax.servlet.FilterChain;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
@@ -13,6 +10,8 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.regex.Pattern;
+
+import com.csee.swplus.mileage.auth.util.RequestPathUtils;
 
 /**
  * Protects Swagger UI and API docs with HTTP Basic Auth.
@@ -23,9 +22,9 @@ import java.util.regex.Pattern;
 // Not @Component - using Spring Security httpBasic chain instead
 public class SwaggerBasicAuthFilter extends org.springframework.web.filter.OncePerRequestFilter {
 
-    // Match with context path (/milestone25_1 or /mileage) or without
+    /** Match path after {@link HttpServletRequest#getContextPath()} (any deployment context). */
     private static final Pattern SWAGGER_PATH = Pattern.compile(
-            "^(/milestone25_1|/mileage)?/(swagger-ui(\\.html)?|swagger-ui/.*|v3/api-docs.*)$");
+            "^/(swagger-ui(\\.html)?|swagger-ui/.*|v3/api-docs.*)$");
 
     @Value("${swagger.auth.user:}")
     private String expectedUser;
@@ -35,8 +34,8 @@ public class SwaggerBasicAuthFilter extends org.springframework.web.filter.OnceP
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        String uri = request.getRequestURI();
-        return !SWAGGER_PATH.matcher(uri).matches();
+        String path = RequestPathUtils.pathWithinApplication(request);
+        return !SWAGGER_PATH.matcher(path).matches();
     }
 
     @Override

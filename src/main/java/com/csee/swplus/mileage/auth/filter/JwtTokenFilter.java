@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import com.csee.swplus.mileage.auth.exception.DoNotLoginException;
 import com.csee.swplus.mileage.auth.service.AuthService;
 import com.csee.swplus.mileage.auth.util.JwtUtil;
+import com.csee.swplus.mileage.auth.util.RequestPathUtils;
 import com.csee.swplus.mileage.user.entity.Users;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -32,39 +33,29 @@ public class JwtTokenFilter extends OncePerRequestFilter {
     private final AuthService authService;
     private final Key SECRET_KEY;
 
-    private static final List<String> EXCLUDED_PATHS = Arrays.asList(
-            // Login/logout endpoints (with or without context path)
-            "/milestone25_1/api/mileage/auth/login$",
-            "/milestone25_1/api/mileage/auth/logout$",
-
-            // Public manager endpoints (contact, MyPage announcement, maintenance flag)
-            "/milestone25_1/api/mileage/contact$",
-            "/milestone25_1/api/mileage/announcement$",
-            "/milestone25_1/api/mileage/maintenance$",
-            // GitHub OAuth callback (public - GitHub redirects here, but we check auth
-            // manually)
-            "/api/mileage/github/callback$",
-            "/milestone25_1/api/mileage/github/callback$",
-
-            // Swagger paths (protected by SwaggerBasicAuthFilter)
-            "^/swagger-ui(/.*)?",
-            "^/v3/api-docs(/.*)?",
-            "^/swagger-resources",
-            "^/webjars",
-            "^/milestone25_1/swagger-ui(/.*)?",
-            "^/milestone25_1/v3/api-docs(/.*)?",
-            "^/milestone25_1/swagger-resources",
-            "^/milestone25_1/webjars",
-            // Actuator
-            "^/milestone25_1/actuator(/.*)?");
+    /** Regex against {@link RequestPathUtils#pathWithinApplication} — no context path prefix. */
+    private static final List<String> EXCLUDED_PATH_REGEX = Arrays.asList(
+            "^/api/mileage/auth/login$",
+            "^/api/mileage/auth/logout$",
+            "^/api/mileage/contact$",
+            "^/api/mileage/announcement$",
+            "^/api/mileage/maintenance$",
+            "^/api/mileage/github/callback$",
+            "^/swagger-ui(/.*)?$",
+            "^/swagger-ui\\.html$",
+            "^/v3/api-docs(/.*)?$",
+            "^/swagger-resources(/.*)?$",
+            "^/webjars(/.*)?$",
+            "^/actuator(/.*)?$");
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
         String requestURI = request.getRequestURI();
-        log.debug("🚀 JwtTokenFilter: 요청 URI: {}", requestURI);
+        String pathWithinApp = RequestPathUtils.pathWithinApplication(request);
+        log.debug("🚀 JwtTokenFilter: URI={} pathWithinApp={}", requestURI, pathWithinApp);
 
-        if (isExcludedPath(requestURI)) {
+        if (isExcludedPath(pathWithinApp)) {
             log.debug("🔸 JwtTokenFilter: 제외된 경로입니다. 필터 체인 계속 진행.");
             filterChain.doFilter(request, response);
             return;
@@ -169,18 +160,17 @@ public class JwtTokenFilter extends OncePerRequestFilter {
         }
     }
 
-    private boolean isExcludedPath(String requestURI) {
-        log.debug("🔍 Checking if path is excluded: {}", requestURI);
+    private boolean isExcludedPath(String pathWithinApp) {
+        log.debug("🔍 Checking if path is excluded: {}", pathWithinApp);
 
-        // Check regex patterns
-        boolean matchesRegex = EXCLUDED_PATHS.stream().anyMatch(requestURI::matches);
+        boolean matchesRegex = EXCLUDED_PATH_REGEX.stream().anyMatch(pathWithinApp::matches);
         if (matchesRegex) {
             log.debug("✅ Path matches excluded regex pattern");
             return true;
         }
 
         // Fallback: check if URI contains Swagger/Actuator paths (case-insensitive)
-        String lowerURI = requestURI.toLowerCase();
+        String lowerURI = pathWithinApp.toLowerCase();
         boolean isSwaggerPath = lowerURI.contains("/swagger-ui") ||
                 lowerURI.contains("/v3/api-docs") ||
                 lowerURI.contains("/swagger-resources") ||
